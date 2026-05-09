@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+
+# Arduino
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.eep
+*.lss
+*.sym
+*.tmp
+*.bak
+build/
+dist/
+
+# ESP-IDF / generated firmware outputs
+sdkconfig
+sdkconfig.old
+dependencies.lock
+managed_components/
+components/
+main/assets/lang_config.h
+main/mmap_generate_*.h
+
+# Local editor and tooling state
+.vscode/
+.idea/
+.cache/
+.clangd
+.env
+.env.*
+
+# Python helper cache
+__pycache__/
+*.py[cod]
+
+# Local reference dumps and vendor binaries
+tmp_xiaozhi_src/
+official_waveshare_v2/
