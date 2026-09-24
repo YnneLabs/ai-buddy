@@ -23,6 +23,12 @@ Para una placa en la misma red, configurá `AI_BUDDY_PUBLIC_BASE_URL` con la IP 
 dominio accesible desde el Buddy. El contrato y las pruebas viven en
 [`backend/`](backend/).
 
+## Firmware Del Buddy
+
+El cliente de red propio vive en [`firmware/ai_buddy_client/`](firmware/ai_buddy_client/).
+Reutiliza el pinout validado del bring-up, ofrece un portal Wi-Fi local y se comunica
+con el gateway sin depender del firmware ni de los servicios XiaoZhi.
+
 ## Estado
 
 Incluye:
