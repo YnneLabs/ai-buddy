@@ -1,0 +1,13 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: ai-buddy-backend
+    environment:
+      AI_BUDDY_DEVICE_TOKEN: ${AI_BUDDY_DEVICE_TOKEN:-local-development-token}
+      AI_BUDDY_PROTOCOL_VERSION: ${AI_BUDDY_PROTOCOL_VERSION:-1}
+      AI_BUDDY_PUBLIC_BASE_URL: ${AI_BUDDY_PUBLIC_BASE_URL:-}
+      AI_BUDDY_AGENT_MODEL: ${AI_BUDDY_AGENT_MODEL:-gemma-4-4b-it}
+    ports:
+      - "${AI_BUDDY_PORT:-8000}:8000"
+    restart: unless-stopped

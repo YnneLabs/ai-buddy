@@ -6,6 +6,23 @@ Este repo tambien sera la base para construir un asistente personal propio, priv
 
 El sketch principal vive en [`waveshare_pet_bringup/`](waveshare_pet_bringup/) y está pensado para compilarse desde Arduino IDE.
 
+## Backend Local
+
+La Fase 1 incorpora un gateway propio para dispositivos. Expone `GET /healthz`,
+`GET /device/config` y `WS /device/session`; por ahora valida el protocolo y los
+eventos de la placa, sin depender de servicios XiaoZhi ni invocar un modelo.
+
+```sh
+cp .env.example .env
+docker compose up --build -d
+curl http://localhost:8000/healthz
+docker compose run --rm --no-deps -e PYTHONPATH=/app -v "$(pwd)/backend/tests:/app/tests:ro" backend pytest -q
+```
+
+Para una placa en la misma red, configurá `AI_BUDDY_PUBLIC_BASE_URL` con la IP o el
+dominio accesible desde el Buddy. El contrato y las pruebas viven en
+[`backend/`](backend/).
+
 ## Estado
 
 Incluye:
