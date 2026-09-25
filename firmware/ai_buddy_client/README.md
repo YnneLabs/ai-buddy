@@ -10,6 +10,7 @@ Firmware Arduino para `Waveshare ESP32-S3 e-Paper 1.54` que se conecta al gatewa
 - sesión `WS /device/session` con `hello`, `boot` y eventos de `BOOT`;
 - e-paper con estados de setup, conexión, online y error;
 - reconexión al perder Wi-Fi o WebSocket;
+- WPS Push Button: mantener `PWR` 1.5 segundos y luego presionar WPS en el router;
 - mantener `BOOT` durante tres segundos borra la configuración y reabre el portal.
 
 Audio, TTS y deep sleep quedan para fases posteriores.
@@ -46,6 +47,13 @@ la V2 de 8 MB es la configuración recomendada para dejar espacio a las fases de
 4. Abrí `http://192.168.4.1`.
 5. Ingresá la red Wi-Fi, el backend de la LAN, por ejemplo `http://192.168.1.4:8000`, y el token configurado en `.env`.
 6. Guardá: el Buddy reinicia, obtiene la configuración y abre su sesión.
+
+## Conexión WPS
+
+Como alternativa a escribir la clave Wi-Fi, mantené el botón `PWR` durante 1.5
+segundos. La pantalla mostrará `Router WPS`; presioná entonces el botón WPS físico
+del router dentro de dos minutos. El Buddy guarda el SSID obtenido. Si todavía no
+tiene URL de backend y token, reabre el portal para completar sólo esos datos.
 
 La URL debe ser accesible desde la placa. Para el backend local, definí `AI_BUDDY_PUBLIC_BASE_URL` con esa misma URL antes de levantar Docker.
 

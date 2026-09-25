@@ -7,6 +7,7 @@
 #include <WebServer.h>
 #include <WebSocketsClient.h>
 #include <WiFi.h>
+#include <esp_wps.h>
 
 #include "board_pins.h"
 
@@ -17,6 +18,8 @@ constexpr char kPortalSsid[] = "AI-Buddy-Setup";
 constexpr uint32_t kWifiConnectTimeoutMs = 15000;
 constexpr uint32_t kReconnectIntervalMs = 5000;
 constexpr uint32_t kResetHoldMs = 3000;
+constexpr uint32_t kWpsHoldMs = 1500;
+constexpr uint32_t kWpsTimeoutMs = 120000;
 
 using DisplayType = GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT>;
 DisplayType gDisplay(GxEPD2_154_D67(board::PIN_EPD_CS, board::PIN_EPD_DC, board::PIN_EPD_RST, board::PIN_EPD_BUSY));
@@ -27,6 +30,7 @@ WebSocketsClient gSocket;
 enum class DeviceState : uint8_t {
   Boot,
   Provisioning,
+  Wps,
   ConnectingWifi,
   FetchingConfig,
   ConnectingSession,
@@ -49,7 +53,14 @@ String gSessionUrl;
 bool gSocketConnected = false;
 bool gBootButtonDown = false;
 uint32_t gBootButtonPressedAtMs = 0;
+bool gPowerButtonDown = false;
+uint32_t gPowerButtonPressedAtMs = 0;
 uint32_t gLastReconnectAtMs = 0;
+bool gWpsActive = false;
+bool gWpsSucceeded = false;
+uint32_t gWpsStartedAtMs = 0;
+
+void startConnection();
 
 const char* stateName(DeviceState state) {
   switch (state) {
@@ -57,6 +68,8 @@ const char* stateName(DeviceState state) {
       return "Starting";
     case DeviceState::Provisioning:
       return "Setup Wi-Fi";
+    case DeviceState::Wps:
+      return "Router WPS";
     case DeviceState::ConnectingWifi:
       return "Connecting Wi-Fi";
     case DeviceState::FetchingConfig:
@@ -123,7 +136,7 @@ void renderState() {
     }
     gDisplay.setTextSize(1);
     gDisplay.setCursor(12, 190);
-    gDisplay.print("BOOT: event   Hold 3s: reset setup");
+    gDisplay.print("PWR 1.5s: WPS  BOOT 3s: reset");
   } while (gDisplay.nextPage());
 }
 
@@ -207,22 +220,30 @@ void savePortalConfig() {
   ESP.restart();
 }
 
-void startPortal() {
-  WiFi.disconnect(true, false);
-  WiFi.mode(WIFI_AP);
+void startPortal(bool preserveStation = false) {
+  if (preserveStation) {
+    WiFi.mode(WIFI_AP_STA);
+  } else {
+    WiFi.disconnect(true, false);
+    WiFi.mode(WIFI_AP);
+  }
   const String password = setupPassword();
   WiFi.softAP(kPortalSsid, password.c_str());
   gPortal.on("/", HTTP_GET, showPortal);
   gPortal.on("/save", HTTP_POST, savePortalConfig);
   gPortal.begin();
-  setState(DeviceState::Provisioning, String("Join ") + kPortalSsid + " / " + password);
+  setState(DeviceState::Provisioning, String("Join ") + kPortalSsid + " / " + password + " or hold PWR for WPS");
   Serial.printf("Provisioning portal: SSID=%s password=%s IP=%s\n", kPortalSsid, password.c_str(), WiFi.softAPIP().toString().c_str());
 }
 
 bool connectWifi() {
   setState(DeviceState::ConnectingWifi, gConfig.wifiSsid);
   WiFi.mode(WIFI_STA);
-  WiFi.begin(gConfig.wifiSsid.c_str(), gConfig.wifiPassword.c_str());
+  if (gConfig.wifiPassword.isEmpty()) {
+    WiFi.begin();
+  } else {
+    WiFi.begin(gConfig.wifiSsid.c_str(), gConfig.wifiPassword.c_str());
+  }
   const uint32_t startedAtMs = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startedAtMs < kWifiConnectTimeoutMs) {
     delay(200);
@@ -233,6 +254,76 @@ bool connectWifi() {
   }
   Serial.printf("Wi-Fi connected: %s\n", WiFi.localIP().toString().c_str());
   return true;
+}
+
+void stopWps() {
+  if (!gWpsActive) {
+    return;
+  }
+  esp_wifi_wps_disable();
+  gWpsActive = false;
+}
+
+void startWps() {
+  if (gWpsActive) {
+    return;
+  }
+  gPortal.stop();
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+
+  esp_wps_config_t config = {};
+  config.wps_type = WPS_TYPE_PBC;
+  snprintf(config.factory_info.manufacturer, sizeof(config.factory_info.manufacturer), "AI Buddy");
+  snprintf(config.factory_info.model_name, sizeof(config.factory_info.model_name), "Personal Agent");
+  snprintf(config.factory_info.device_name, sizeof(config.factory_info.device_name), "%s", gConfig.deviceId.c_str());
+  snprintf(config.pin, sizeof(config.pin), "00000000");
+  const esp_err_t enableResult = esp_wifi_wps_enable(&config);
+  if (enableResult != ESP_OK) {
+    setState(DeviceState::Error, "WPS unavailable");
+    return;
+  }
+  const esp_err_t startResult = esp_wifi_wps_start(0);
+  if (startResult != ESP_OK) {
+    esp_wifi_wps_disable();
+    setState(DeviceState::Error, "WPS could not start");
+    return;
+  }
+  gWpsActive = true;
+  gWpsSucceeded = false;
+  gWpsStartedAtMs = millis();
+  setState(DeviceState::Wps, "Press WPS on your router now");
+  Serial.println("WPS started; waiting for router button");
+}
+
+void onWifiEvent(WiFiEvent_t event, arduino_event_info_t) {
+  if (event == ARDUINO_EVENT_WPS_ER_SUCCESS) {
+    gWpsSucceeded = true;
+  }
+}
+
+void processWps() {
+  if (!gWpsActive) {
+    return;
+  }
+  if (gWpsSucceeded) {
+    stopWps();
+    WiFi.begin();
+    gConfig.wifiSsid = WiFi.SSID();
+    gConfig.wifiPassword = "";
+    saveConfig();
+    if (configComplete()) {
+      startConnection();
+    } else {
+      startPortal(true);
+    }
+    return;
+  }
+  if (millis() - gWpsStartedAtMs >= kWpsTimeoutMs) {
+    stopWps();
+    setState(DeviceState::Error, "WPS timed out; try again");
+    startPortal();
+  }
 }
 
 bool parseWebsocketUrl(const String& url, String* host, uint16_t* port, String* path) {
@@ -367,6 +458,22 @@ void handleBootButton() {
   }
 }
 
+void handlePowerButton() {
+  const bool pressed = digitalRead(board::PIN_BTN_BOTTOM) == LOW;
+  if (pressed && !gPowerButtonDown) {
+    gPowerButtonDown = true;
+    gPowerButtonPressedAtMs = millis();
+    return;
+  }
+  if (!pressed && gPowerButtonDown) {
+    const uint32_t heldMs = millis() - gPowerButtonPressedAtMs;
+    gPowerButtonDown = false;
+    if (heldMs >= kWpsHoldMs) {
+      startWps();
+    }
+  }
+}
+
 }  // namespace
 
 void setup() {
@@ -379,6 +486,7 @@ void setup() {
   pinMode(board::PIN_STATUS_LED, OUTPUT);
   digitalWrite(board::PIN_STATUS_LED, HIGH);
   pinMode(board::PIN_BTN_TOP, INPUT_PULLUP);
+  pinMode(board::PIN_BTN_BOTTOM, INPUT_PULLUP);
   pinMode(board::PIN_EPD_POWER, OUTPUT);
   digitalWrite(board::PIN_EPD_POWER, LOW);
   SPI.begin(board::PIN_EPD_SCLK, -1, board::PIN_EPD_MOSI, board::PIN_EPD_CS);
@@ -387,6 +495,7 @@ void setup() {
   gDisplay.setTextColor(GxEPD_BLACK);
 
   loadConfig();
+  WiFi.onEvent(onWifiEvent);
   setState(DeviceState::Boot, gConfig.deviceId);
   if (!configComplete()) {
     startPortal();
@@ -397,6 +506,12 @@ void setup() {
 
 void loop() {
   handleBootButton();
+  handlePowerButton();
+  processWps();
+  if (gWpsActive) {
+    delay(10);
+    return;
+  }
   if (gState == DeviceState::Provisioning) {
     gPortal.handleClient();
     delay(10);
