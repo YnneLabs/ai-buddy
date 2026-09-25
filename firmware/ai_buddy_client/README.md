@@ -14,6 +14,10 @@ Firmware Arduino para `Waveshare ESP32-S3 e-Paper 1.54` que se conecta al gatewa
 
 Audio, TTS y deep sleep quedan para fases posteriores.
 
+El LED integrado en `GPIO3` queda encendido mientras el firmware esta activo. Al
+apagar o entrar en deep sleep se apaga; el hardware validado solo expone este
+indicador binario, no un LED RGB para representar colores distintos.
+
 ## Dependencias
 
 Instaladas y verificadas con Arduino CLI:

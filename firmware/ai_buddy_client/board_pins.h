@@ -15,5 +15,6 @@ constexpr uint8_t PIN_EPD_MOSI = 13;
 
 constexpr uint8_t PIN_BTN_TOP = 0;
 constexpr uint8_t PIN_VBAT_HOLD = 17;
+constexpr uint8_t PIN_STATUS_LED = 3;
 
 }  // namespace board

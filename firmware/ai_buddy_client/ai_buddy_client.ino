@@ -133,6 +133,8 @@ void setState(DeviceState state, const String& detail) {
   }
   gState = state;
   gStateDetail = detail;
+  // GPIO3 is the validated active-high indicator: lit means firmware is awake.
+  digitalWrite(board::PIN_STATUS_LED, HIGH);
   Serial.printf("STATE %s: %s\n", stateName(state), detail.c_str());
   renderState();
 }
@@ -374,6 +376,8 @@ void setup() {
 
   pinMode(board::PIN_VBAT_HOLD, OUTPUT);
   digitalWrite(board::PIN_VBAT_HOLD, HIGH);
+  pinMode(board::PIN_STATUS_LED, OUTPUT);
+  digitalWrite(board::PIN_STATUS_LED, HIGH);
   pinMode(board::PIN_BTN_TOP, INPUT_PULLUP);
   pinMode(board::PIN_EPD_POWER, OUTPUT);
   digitalWrite(board::PIN_EPD_POWER, LOW);
