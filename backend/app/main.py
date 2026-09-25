@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 
+from .agent import AgentSettings, BuddyAgent
 from .config import Settings, get_settings
 
 
@@ -32,6 +33,17 @@ def websocket_url(request: Request, settings: Settings) -> str:
     parsed = urlparse(base_url)
     scheme = "wss" if parsed.scheme == "https" else "ws"
     return f"{scheme}://{parsed.netloc}/device/session"
+
+
+def get_agent(settings: Settings) -> BuddyAgent:
+    return BuddyAgent(
+        AgentSettings(
+            provider=settings.agent_provider,
+            model=settings.agent_model,
+            ollama_base_url=settings.ollama_base_url,
+            timeout_seconds=settings.agent_timeout_seconds,
+        )
+    )
 
 
 @app.get("/healthz")
@@ -101,10 +113,11 @@ async def device_session(
             elif event_type == "button":
                 button = str(message.get("button", "unknown"))
                 logger.info("button event session_id=%s device_id=%s button=%s", session_id, device_id, button)
+                response_text = await get_agent(settings).respond_to_button(device_id)
                 await websocket.send_json(
                     {
                         "type": "show_text",
-                        "text": "Buddy online. Button received.",
+                        "text": response_text,
                     }
                 )
             else:

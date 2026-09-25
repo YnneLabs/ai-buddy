@@ -8,6 +8,11 @@ services:
       AI_BUDDY_PROTOCOL_VERSION: ${AI_BUDDY_PROTOCOL_VERSION:-1}
       AI_BUDDY_PUBLIC_BASE_URL: ${AI_BUDDY_PUBLIC_BASE_URL:-}
       AI_BUDDY_AGENT_MODEL: ${AI_BUDDY_AGENT_MODEL:-gemma-4-4b-it}
+      AI_BUDDY_AGENT_PROVIDER: ${AI_BUDDY_AGENT_PROVIDER:-ollama}
+      AI_BUDDY_OLLAMA_BASE_URL: ${AI_BUDDY_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      AI_BUDDY_AGENT_TIMEOUT_SECONDS: ${AI_BUDDY_AGENT_TIMEOUT_SECONDS:-90}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${AI_BUDDY_PORT:-8000}:8000"
     restart: unless-stopped

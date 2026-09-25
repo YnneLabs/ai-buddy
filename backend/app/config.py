@@ -10,6 +10,9 @@ class Settings:
     protocol_version: str
     public_base_url: str
     agent_model: str
+    agent_provider: str
+    ollama_base_url: str
+    agent_timeout_seconds: float
 
 
 def get_settings() -> Settings:
@@ -19,4 +22,7 @@ def get_settings() -> Settings:
         protocol_version=os.getenv("AI_BUDDY_PROTOCOL_VERSION", "1"),
         public_base_url=os.getenv("AI_BUDDY_PUBLIC_BASE_URL", "").rstrip("/"),
         agent_model=os.getenv("AI_BUDDY_AGENT_MODEL", "gemma-4-4b-it"),
+        agent_provider=os.getenv("AI_BUDDY_AGENT_PROVIDER", "mock"),
+        ollama_base_url=os.getenv("AI_BUDDY_OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
+        agent_timeout_seconds=float(os.getenv("AI_BUDDY_AGENT_TIMEOUT_SECONDS", "90")),
     )

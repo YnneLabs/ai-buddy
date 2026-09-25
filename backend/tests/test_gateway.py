@@ -1,3 +1,7 @@
+import os
+
+os.environ["AI_BUDDY_AGENT_PROVIDER"] = "mock"
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -45,4 +49,4 @@ def test_websocket_handshake_ping_and_button_event():
     assert ready["type"] == "session_ready"
     assert ready["protocol_version"] == "1"
     assert pong == {"type": "pong"}
-    assert command == {"type": "show_text", "text": "Buddy online. Button received."}
+    assert command == {"type": "show_text", "text": "Buddy online. I received your button."}

@@ -10,7 +10,8 @@ El sketch principal vive en [`waveshare_pet_bringup/`](waveshare_pet_bringup/) y
 
 La Fase 1 incorpora un gateway propio para dispositivos. Expone `GET /healthz`,
 `GET /device/config` y `WS /device/session`; por ahora valida el protocolo y los
-eventos de la placa, sin depender de servicios XiaoZhi ni invocar un modelo.
+eventos de la placa, sin depender de servicios XiaoZhi. Al usar Ollama, el evento
+de boton llama a Gemma 4 local y devuelve una respuesta corta al e-paper.
 
 ```sh
 cp .env.example .env
@@ -28,6 +29,12 @@ dominio accesible desde el Buddy. El contrato y las pruebas viven en
 El cliente de red propio vive en [`firmware/ai_buddy_client/`](firmware/ai_buddy_client/).
 Reutiliza el pinout validado del bring-up, ofrece un portal Wi-Fi local y se comunica
 con el gateway sin depender del firmware ni de los servicios XiaoZhi.
+
+Cuando `AI_BUDDY_AGENT_PROVIDER=ollama`, el evento del boton llama a Gemma 4 local
+(`gemma4:e4b`) y muestra su respuesta corta en el e-paper. El proveedor `mock` se
+usa solo para pruebas reproducibles.
+La seleccion y el camino de escalamiento estan en
+[`docs/gemma-model-choice.md`](docs/gemma-model-choice.md).
 
 ## Estado
 
