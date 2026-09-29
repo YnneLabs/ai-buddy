@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Dict
 from urllib.parse import urlparse
@@ -11,6 +12,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Web
 
 from .agent import AgentSettings, BuddyAgent
 from .config import Settings, get_settings
+from .transcription import BuddyTranscriber, TranscriptionSettings
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -46,6 +48,17 @@ def get_agent(settings: Settings) -> BuddyAgent:
     )
 
 
+def get_transcriber(settings: Settings) -> BuddyTranscriber:
+    return BuddyTranscriber(
+        TranscriptionSettings(
+            provider=settings.stt_provider,
+            model=settings.stt_model,
+            language=settings.stt_language,
+            timeout_seconds=settings.stt_timeout_seconds,
+        )
+    )
+
+
 @app.get("/healthz")
 def healthz(settings: Settings = Depends(get_settings)) -> Dict[str, str]:
     return {
@@ -68,7 +81,8 @@ def device_config(
         "session_url": websocket_url(request, settings),
         "agent_model": settings.agent_model,
         "features": {
-            "audio_streaming": False,
+            "audio_streaming": True,
+            "audio_upload": True,
             "display_text": True,
             "remote_commands": True,
         },
@@ -88,11 +102,50 @@ async def device_session(
     await websocket.accept()
     session_id = str(uuid4())
     device_id = "unknown"
+    pending_audio: dict[str, Any] | None = None
     logger.info("session connected session_id=%s", session_id)
 
     try:
         while True:
-            message = await websocket.receive_json()
+            frame = await websocket.receive()
+            if frame["type"] == "websocket.disconnect":
+                raise WebSocketDisconnect
+            audio_bytes = frame.get("bytes")
+            if audio_bytes is not None:
+                if pending_audio is None:
+                    await websocket.send_json({"type": "error", "code": "unexpected_audio"})
+                    continue
+                expected_bytes = pending_audio["bytes"]
+                if len(audio_bytes) != expected_bytes:
+                    await websocket.send_json(
+                        {"type": "error", "code": "invalid_audio_length", "expected": expected_bytes}
+                    )
+                    pending_audio = None
+                    continue
+                try:
+                    transcript = await get_transcriber(settings).transcribe_pcm(
+                        audio_bytes,
+                        pending_audio["sample_rate"],
+                        pending_audio["channels"],
+                    )
+                except Exception as exc:  # Keep a transcription failure from dropping the device session.
+                    logger.warning("audio transcription failed device_id=%s error=%s", device_id, exc)
+                    await websocket.send_json({"type": "error", "code": "transcription_failed"})
+                else:
+                    logger.info("audio transcribed device_id=%s bytes=%s", device_id, len(audio_bytes))
+                    await websocket.send_json({"type": "transcription", "text": transcript})
+                pending_audio = None
+                continue
+
+            text = frame.get("text")
+            if text is None:
+                await websocket.send_json({"type": "error", "code": "invalid_message"})
+                continue
+            try:
+                message = json.loads(text)
+            except json.JSONDecodeError:
+                await websocket.send_json({"type": "error", "code": "invalid_message"})
+                continue
             if not isinstance(message, dict):
                 await websocket.send_json({"type": "error", "code": "invalid_message"})
                 continue
@@ -110,6 +163,25 @@ async def device_session(
                 )
             elif event_type == "ping":
                 await websocket.send_json({"type": "pong"})
+            elif event_type == "audio_start":
+                sample_rate = message.get("sample_rate")
+                channels = message.get("channels")
+                byte_count = message.get("bytes")
+                if (
+                    message.get("format") != "pcm_s16le"
+                    or not isinstance(sample_rate, int)
+                    or not isinstance(channels, int)
+                    or not isinstance(byte_count, int)
+                    or sample_rate != 16000
+                    or channels != 2
+                    or byte_count <= 0
+                    or byte_count > 512000
+                    or byte_count % (channels * 2) != 0
+                ):
+                    await websocket.send_json({"type": "error", "code": "invalid_audio_metadata"})
+                    continue
+                pending_audio = {"sample_rate": sample_rate, "channels": channels, "bytes": byte_count}
+                await websocket.send_json({"type": "audio_receiving"})
             elif event_type == "button":
                 button = str(message.get("button", "unknown"))
                 logger.info("button event session_id=%s device_id=%s button=%s", session_id, device_id, button)

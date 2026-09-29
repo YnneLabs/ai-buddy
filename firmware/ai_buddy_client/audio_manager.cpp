@@ -101,6 +101,8 @@ bool AudioManager::hasRecording() const { return recordedBytes_ > 0; }
 
 size_t AudioManager::recordedBytes() const { return recordedBytes_; }
 
+const uint8_t* AudioManager::recordingData() const { return buffer_; }
+
 void AudioManager::playRecording() {
   if (!ready_ || !hasRecording()) {
     return;

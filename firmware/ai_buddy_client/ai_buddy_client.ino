@@ -420,6 +420,12 @@ void handleSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
   const char* messageType = message["type"] | "";
   if (strcmp(messageType, "show_text") == 0) {
     setState(DeviceState::Online, String(message["text"] | ""));
+  } else if (strcmp(messageType, "audio_receiving") == 0) {
+    setState(DeviceState::Listening, "Transcribing audio");
+  } else if (strcmp(messageType, "transcription") == 0) {
+    setState(DeviceState::Online, String(message["text"] | ""));
+  } else if (strcmp(messageType, "error") == 0) {
+    setState(DeviceState::Error, String(message["code"] | "Audio error"));
   }
 }
 
@@ -495,9 +501,24 @@ void handleBootButton() {
     if (gAudio.isRecording()) {
       gAudio.finishRecording();
       Serial.printf("AUDIO captured bytes=%u\n", static_cast<unsigned>(gAudio.recordedBytes()));
-      setState(DeviceState::PlayingAudio, "Replaying local audio");
-      gAudio.playRecording();
-      setState(DeviceState::Online, WiFi.localIP().toString());
+      if (gSocketConnected && gAudio.hasRecording()) {
+        JsonDocument metadata;
+        metadata["type"] = "audio_start";
+        metadata["format"] = "pcm_s16le";
+        metadata["sample_rate"] = 16000;
+        metadata["channels"] = 2;
+        metadata["bytes"] = gAudio.recordedBytes();
+        sendJson(metadata);
+        if (gSocket.sendBIN(gAudio.recordingData(), gAudio.recordedBytes())) {
+          setState(DeviceState::Listening, "Sending audio");
+        } else {
+          setState(DeviceState::Error, "Audio upload failed");
+        }
+      } else {
+        setState(DeviceState::PlayingAudio, "Replaying local audio");
+        gAudio.playRecording();
+        setState(DeviceState::Online, WiFi.localIP().toString());
+      }
       return;
     }
     if (gAudioReady) {

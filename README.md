@@ -36,6 +36,14 @@ usa solo para pruebas reproducibles.
 La seleccion y el camino de escalamiento estan en
 [`docs/gemma-model-choice.md`](docs/gemma-model-choice.md).
 
+La primera etapa de voz envia la captura del Buddy como PCM estereo de 16 kHz por
+el WebSocket propio. El gateway la transcribe localmente con `faster-whisper` y
+muestra el texto en el e-paper. Por defecto se usa el modelo `base` en espanol;
+su descarga se realiza una unica vez y se conserva en el volumen Docker
+`stt_models`. Configuralo mediante `AI_BUDDY_STT_PROVIDER`,
+`AI_BUDDY_STT_MODEL` y `AI_BUDDY_STT_LANGUAGE`. Para pruebas sin modelo se puede
+usar `AI_BUDDY_STT_PROVIDER=mock`.
+
 ## Estado
 
 Incluye:

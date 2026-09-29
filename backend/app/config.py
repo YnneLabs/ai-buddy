@@ -13,6 +13,10 @@ class Settings:
     agent_provider: str
     ollama_base_url: str
     agent_timeout_seconds: float
+    stt_provider: str
+    stt_model: str
+    stt_language: str
+    stt_timeout_seconds: float
 
 
 def get_settings() -> Settings:
@@ -25,4 +29,8 @@ def get_settings() -> Settings:
         agent_provider=os.getenv("AI_BUDDY_AGENT_PROVIDER", "mock"),
         ollama_base_url=os.getenv("AI_BUDDY_OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
         agent_timeout_seconds=float(os.getenv("AI_BUDDY_AGENT_TIMEOUT_SECONDS", "90")),
+        stt_provider=os.getenv("AI_BUDDY_STT_PROVIDER", "faster_whisper"),
+        stt_model=os.getenv("AI_BUDDY_STT_MODEL", "base"),
+        stt_language=os.getenv("AI_BUDDY_STT_LANGUAGE", "es"),
+        stt_timeout_seconds=float(os.getenv("AI_BUDDY_STT_TIMEOUT_SECONDS", "90")),
     )
