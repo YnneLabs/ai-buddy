@@ -11,6 +11,26 @@
 
 #include "board_pins.h"
 
+#if __has_include("local_config.h")
+#include "local_config.h"
+#endif
+
+#ifndef AI_BUDDY_DEFAULT_WIFI_SSID
+#define AI_BUDDY_DEFAULT_WIFI_SSID ""
+#endif
+
+#ifndef AI_BUDDY_DEFAULT_WIFI_PASSWORD
+#define AI_BUDDY_DEFAULT_WIFI_PASSWORD ""
+#endif
+
+#ifndef AI_BUDDY_DEFAULT_BACKEND_URL
+#define AI_BUDDY_DEFAULT_BACKEND_URL ""
+#endif
+
+#ifndef AI_BUDDY_DEFAULT_DEVICE_TOKEN
+#define AI_BUDDY_DEFAULT_DEVICE_TOKEN ""
+#endif
+
 namespace {
 
 constexpr char kProtocolVersion[] = "1";
@@ -160,6 +180,19 @@ void loadConfig() {
   gConfig.deviceToken = gPreferences.getString("token", "");
   gConfig.deviceId = gPreferences.getString("device_id", deviceIdFromMac());
   gPreferences.end();
+
+  if (gConfig.wifiSsid.isEmpty()) {
+    gConfig.wifiSsid = AI_BUDDY_DEFAULT_WIFI_SSID;
+  }
+  if (gConfig.wifiPassword.isEmpty()) {
+    gConfig.wifiPassword = AI_BUDDY_DEFAULT_WIFI_PASSWORD;
+  }
+  if (gConfig.backendBaseUrl.isEmpty()) {
+    gConfig.backendBaseUrl = AI_BUDDY_DEFAULT_BACKEND_URL;
+  }
+  if (gConfig.deviceToken.isEmpty()) {
+    gConfig.deviceToken = AI_BUDDY_DEFAULT_DEVICE_TOKEN;
+  }
 }
 
 bool configComplete() {

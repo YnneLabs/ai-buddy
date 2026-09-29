@@ -31,6 +31,10 @@ main/mmap_generate_*.h
 .clangd
 .env
 .env.*
+!.env.example
+
+# Device-specific firmware credentials. Never commit these files.
+firmware/ai_buddy_client/local_config.h
 
 # Python helper cache
 __pycache__/
