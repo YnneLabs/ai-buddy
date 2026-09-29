@@ -139,3 +139,25 @@ def test_grokbot_callback_rejects_unknown_request(monkeypatch):
     )
 
     assert response.status_code == 404
+
+
+def test_grokbot_can_send_a_proactive_message_without_request_id(monkeypatch):
+    monkeypatch.setenv("AI_BUDDY_GROKBOT_CALLBACK_TOKEN", "callback-test-token")
+
+    with client.websocket_connect(f"/device/session?token={TOKEN}") as websocket:
+        websocket.send_json({"type": "hello", "device_id": "buddy-proactive"})
+        websocket.receive_json()
+        response = client.post(
+            "/integrations/grokbot/reply",
+            headers={"Authorization": "Bearer callback-test-token"},
+            json={"device_id": "buddy-proactive", "response_text": "Tienes una nueva alerta."},
+        )
+        caption = websocket.receive_json()
+        audio_start = websocket.receive_json()
+        audio = websocket.receive_bytes()
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "delivered", "request_id": "none", "mode": "proactive"}
+    assert caption == {"type": "show_text", "text": "Tienes una nueva alerta."}
+    assert audio_start["type"] == "assistant_audio_start"
+    assert audio == b"\x00\x00\x00\x00" * 1600

@@ -42,9 +42,11 @@ URLs. A provisioned device can be migrated once using the two
 `AI_BUDDY_BACKEND_MIGRATE_*` settings in `local_config.h`.
 
 The Grokbot route is asynchronous: Cursor schedules the automation before it
-can issue the callback. Set `AI_BUDDY_GROKBOT_RESPONSE_MAX_CHARS=160` (or less)
-to keep spoken answers quick; gateway logs report STT, dispatch, callback, and
-TTS timings separately.
+can issue the callback. Buddy can play at most 8 seconds of PCM output per
+message, so keep `AI_BUDDY_GROKBOT_RESPONSE_MAX_CHARS` at 100 or less. The
+gateway rejects a synthesis that exceeds the device buffer with
+`audio_too_long`; its logs report STT, dispatch, callback, and TTS timings
+separately.
 
 `FastRouter` keeps greetings, acknowledgements, and short social exchanges on
 local Gemma. Reminders, information queries, and every non-trivial request use
@@ -111,6 +113,19 @@ curl -X POST https://ai-buddy.evil-gamer.net/integrations/grokbot/reply \
 El backend valida el request, sintetiza `response_text` con Piper y lo envia
 al Buddy por su WebSocket activo. Sin esas tres variables, el backend conserva
 Gemma local como fallback.
+
+Grokbot tambien puede iniciar un mensaje sin una transcripcion previa ni
+`request_id`. Usa el mismo endpoint, autenticacion y `device_id`:
+
+```sh
+curl -X POST https://ai-buddy.evil-gamer.net/integrations/grokbot/reply \
+  -H 'Authorization: Bearer <AI_BUDDY_GROKBOT_CALLBACK_TOKEN>' \
+  -H 'Content-Type: application/json' \
+  -d '{"device_id":"buddy-1D0470","response_text":"Tienes un recordatorio pendiente."}'
+```
+
+El gateway responde `202` con `mode: proactive`, muestra el texto y lo habla
+de inmediato. El Buddy debe estar conectado; de lo contrario responde `409`.
 
 ## Estado
 

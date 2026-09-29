@@ -6,7 +6,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from time import perf_counter
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -27,10 +27,21 @@ logger = logging.getLogger("ai_buddy.gateway")
 
 app = FastAPI(title="AI Buddy Gateway", version="0.1.0")
 MAX_DEVICE_AUDIO_CHUNK_BYTES = 8 * 1024
+DEVICE_AUDIO_SAMPLE_RATE = 16000
+DEVICE_AUDIO_CHANNELS = 2
+DEVICE_AUDIO_BYTES_PER_SAMPLE = 2
+DEVICE_AUDIO_MAX_SECONDS = 8
+MAX_DEVICE_AUDIO_BYTES = (
+    DEVICE_AUDIO_SAMPLE_RATE * DEVICE_AUDIO_CHANNELS * DEVICE_AUDIO_BYTES_PER_SAMPLE * DEVICE_AUDIO_MAX_SECONDS
+)
+
+
+class DeviceAudioTooLongError(ValueError):
+    """Raised when synthesis cannot fit in Buddy's fixed PSRAM audio buffer."""
 
 
 class GrokbotReply(BaseModel):
-    request_id: str = Field(min_length=1, max_length=128)
+    request_id: Optional[str] = Field(default=None, max_length=128)
     device_id: str = Field(min_length=1, max_length=128)
     response_text: str = Field(min_length=1, max_length=1000)
 
@@ -125,8 +136,10 @@ async def send_spoken_reply(websocket: WebSocket, settings: Settings, device_id:
     await websocket.send_json({"type": "show_text", "text": response_text})
     synthesis_started_at = perf_counter()
     speech = await get_speech(settings).synthesize(response_text)
-    if len(speech) > 512000:
-        raise ValueError("generated audio exceeds device limit")
+    if len(speech) > MAX_DEVICE_AUDIO_BYTES:
+        raise DeviceAudioTooLongError(
+            f"generated audio exceeds {DEVICE_AUDIO_MAX_SECONDS}s device limit ({len(speech)} bytes)"
+        )
     await websocket.send_json(
         {
             "type": "assistant_audio_start",
@@ -156,32 +169,48 @@ async def grokbot_reply(
     expected = f"Bearer {settings.grokbot_callback_token}"
     if not settings.grokbot_callback_token or authorization != expected:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid callback token")
+    request_id = reply.request_id.strip() if reply.request_id else ""
     memory = get_memory(settings)
-    pending = memory.external_request(reply.request_id)
-    if pending is None or pending.device_id != reply.device_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown request")
+    pending = None
+    if request_id:
+        pending = memory.external_request(request_id)
+        if pending is None or pending.device_id != reply.device_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown request")
     websocket = connections.get(reply.device_id)
     if websocket is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="device is offline")
     response_text = " ".join(reply.response_text.split())[: settings.grokbot_response_max_chars]
     try:
-        dispatched_at = datetime.fromisoformat(pending.created_at)
+        dispatched_at = datetime.fromisoformat(pending.created_at) if pending else datetime.now(timezone.utc)
         callback_ms = (datetime.now(timezone.utc) - dispatched_at).total_seconds() * 1000
     except ValueError:
         callback_ms = -1
-    logger.info("Grokbot callback received request_id=%s callback_ms=%.0f", reply.request_id, callback_ms)
+    delivery_kind = "reply" if pending else "proactive"
+    logger.info(
+        "Grokbot %s received request_id=%s device_id=%s callback_ms=%.0f",
+        delivery_kind,
+        request_id or "none",
+        reply.device_id,
+        callback_ms,
+    )
     try:
         await send_spoken_reply(websocket, settings, reply.device_id, response_text)
+    except DeviceAudioTooLongError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "audio_too_long", "max_seconds": DEVICE_AUDIO_MAX_SECONDS},
+        ) from exc
     except Exception as exc:
-        logger.warning("Grokbot reply delivery failed request_id=%s error=%s", reply.request_id, exc)
+        logger.warning("Grokbot %s delivery failed request_id=%s error=%s", delivery_kind, request_id or "none", exc)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="reply delivery failed") from exc
-    memory.append_turn(reply.device_id, pending.user_text, response_text)
-    memory.complete_external_request(reply.request_id)
-    proposal = memory.propose_from_transcript(reply.device_id, pending.user_text)
-    if proposal is not None:
-        request_id, content = proposal
-        await websocket.send_json({"type": "memory_confirmation", "request_id": request_id, "content": content})
-    return {"status": "delivered", "request_id": reply.request_id}
+    if pending is not None:
+        memory.append_turn(reply.device_id, pending.user_text, response_text)
+        memory.complete_external_request(request_id)
+        proposal = memory.propose_from_transcript(reply.device_id, pending.user_text)
+        if proposal is not None:
+            memory_request_id, content = proposal
+            await websocket.send_json({"type": "memory_confirmation", "request_id": memory_request_id, "content": content})
+    return {"status": "delivered", "request_id": request_id or "none", "mode": delivery_kind}
 
 
 @app.get("/healthz")
@@ -343,11 +372,11 @@ async def device_session(
                     or not isinstance(sample_rate, int)
                     or not isinstance(channels, int)
                     or not isinstance(byte_count, int)
-                    or sample_rate != 16000
-                    or channels != 2
+                    or sample_rate != DEVICE_AUDIO_SAMPLE_RATE
+                    or channels != DEVICE_AUDIO_CHANNELS
                     or byte_count <= 0
-                    or byte_count > 512000
-                    or byte_count % (channels * 2) != 0
+                    or byte_count > MAX_DEVICE_AUDIO_BYTES
+                    or byte_count % (channels * DEVICE_AUDIO_BYTES_PER_SAMPLE) != 0
                 ):
                     await websocket.send_json({"type": "error", "code": "invalid_audio_metadata"})
                     continue
