@@ -556,6 +556,9 @@ void setup() {
   Wire.begin(board::PIN_I2C_SDA, board::PIN_I2C_SCL);
   gAudioReady = gAudio.begin();
   Serial.printf("AUDIO codec=%s free_psram=%u\n", gAudioReady ? "ok" : "fail", static_cast<unsigned>(ESP.getFreePsram()));
+  if (gAudioReady) {
+    gAudio.playStartupChime();
+  }
 
   loadConfig();
   WiFi.onEvent(onWifiEvent);

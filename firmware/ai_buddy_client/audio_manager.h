@@ -15,6 +15,7 @@ class AudioManager {
   size_t recordedBytes() const;
   void playRecording();
   void playTone(uint16_t frequencyHz, uint16_t durationMs);
+  void playStartupChime();
   void shutdown();
 
  private:
@@ -35,6 +36,7 @@ class AudioManager {
   static constexpr size_t kMaxSeconds = 8;
   static constexpr size_t kMaxBytes = kSampleRate * kMaxSeconds * kBytesPerFrame;
   static constexpr size_t kChunkBytes = 1024;
+  static constexpr uint16_t kAmplifierStartupMs = 140;
 
   uint8_t* buffer_ = nullptr;
   size_t recordedBytes_ = 0;

@@ -129,6 +129,23 @@ void AudioManager::playTone(uint16_t frequencyHz, uint16_t durationMs) {
   setAmplifierEnabled(false);
 }
 
+void AudioManager::playStartupChime() {
+  if (!ready_) {
+    return;
+  }
+  setAmplifierEnabled(true);
+  stopCodecPath();
+  startCodecPath(false, true);
+  synthTone(659, 110);
+  delay(30);
+  synthTone(784, 110);
+  delay(30);
+  synthTone(1047, 220);
+  delay(40);
+  stopCodecPath();
+  setAmplifierEnabled(false);
+}
+
 void AudioManager::shutdown() {
   recording_ = false;
   stopCodecPath();
@@ -259,8 +276,16 @@ void AudioManager::stopCodecPath() {
 }
 
 void AudioManager::setAmplifierEnabled(bool enabled) {
-  digitalWrite(board::PIN_AUDIO_PWR, enabled ? LOW : HIGH);
-  digitalWrite(board::PIN_AUDIO_CTRL, enabled ? HIGH : LOW);
+  if (enabled) {
+    digitalWrite(board::PIN_AUDIO_PWR, LOW);
+    delay(5);
+    digitalWrite(board::PIN_AUDIO_CTRL, HIGH);
+    delay(kAmplifierStartupMs);
+    return;
+  }
+  digitalWrite(board::PIN_AUDIO_CTRL, LOW);
+  delay(5);
+  digitalWrite(board::PIN_AUDIO_PWR, HIGH);
 }
 
 void AudioManager::writeChunk(const uint8_t* data, size_t bytes) {
