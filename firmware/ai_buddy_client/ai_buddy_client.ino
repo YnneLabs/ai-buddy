@@ -8,6 +8,7 @@
 #include <WebServer.h>
 #include <WebSocketsClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <esp_wps.h>
 
 #include "board_pins.h"
@@ -31,6 +32,14 @@
 
 #ifndef AI_BUDDY_DEFAULT_DEVICE_TOKEN
 #define AI_BUDDY_DEFAULT_DEVICE_TOKEN ""
+#endif
+
+#ifndef AI_BUDDY_BACKEND_MIGRATE_FROM
+#define AI_BUDDY_BACKEND_MIGRATE_FROM ""
+#endif
+
+#ifndef AI_BUDDY_BACKEND_MIGRATE_TO
+#define AI_BUDDY_BACKEND_MIGRATE_TO ""
 #endif
 
 namespace {
@@ -78,6 +87,8 @@ String gStateDetail;
 String gSessionUrl;
 String gPendingMemoryId;
 bool gSocketConnected = false;
+
+void saveConfig();
 bool gBootButtonDown = false;
 uint32_t gBootButtonPressedAtMs = 0;
 bool gPowerButtonDown = false;
@@ -210,6 +221,13 @@ void loadConfig() {
   }
   if (gConfig.deviceToken.isEmpty()) {
     gConfig.deviceToken = AI_BUDDY_DEFAULT_DEVICE_TOKEN;
+  }
+
+  const String migrateFrom = AI_BUDDY_BACKEND_MIGRATE_FROM;
+  const String migrateTo = AI_BUDDY_BACKEND_MIGRATE_TO;
+  if (!migrateFrom.isEmpty() && !migrateTo.isEmpty() && gConfig.backendBaseUrl == migrateFrom) {
+    gConfig.backendBaseUrl = migrateTo;
+    saveConfig();
   }
 }
 
@@ -377,16 +395,22 @@ void processWps() {
   }
 }
 
-bool parseWebsocketUrl(const String& url, String* host, uint16_t* port, String* path) {
-  if (!url.startsWith("ws://")) {
+bool parseWebsocketUrl(const String& url, String* host, uint16_t* port, String* path, bool* secure) {
+  int authorityStart = 0;
+  if (url.startsWith("wss://")) {
+    authorityStart = 6;
+    *secure = true;
+  } else if (url.startsWith("ws://")) {
+    authorityStart = 5;
+    *secure = false;
+  } else {
     return false;
   }
-  const int authorityStart = 5;
   const int pathStart = url.indexOf('/', authorityStart);
   const String authority = pathStart < 0 ? url.substring(authorityStart) : url.substring(authorityStart, pathStart);
   const int colon = authority.lastIndexOf(':');
   *host = colon < 0 ? authority : authority.substring(0, colon);
-  *port = colon < 0 ? 80 : static_cast<uint16_t>(authority.substring(colon + 1).toInt());
+  *port = colon < 0 ? (*secure ? 443 : 80) : static_cast<uint16_t>(authority.substring(colon + 1).toInt());
   *path = pathStart < 0 ? "/" : url.substring(pathStart);
   return !host->isEmpty() && *port != 0;
 }
@@ -481,7 +505,16 @@ bool fetchDeviceConfig() {
   setState(DeviceState::FetchingConfig, gConfig.backendBaseUrl);
   HTTPClient http;
   const String url = gConfig.backendBaseUrl + "/device/config?device_id=" + gConfig.deviceId;
-  if (!http.begin(url)) {
+  WiFiClientSecure secureClient;
+  bool started = false;
+  if (url.startsWith("https://")) {
+    // The deployed endpoint is Cloudflare-managed. ESP32's bundled CA store is not used here.
+    secureClient.setInsecure();
+    started = http.begin(secureClient, url);
+  } else {
+    started = http.begin(url);
+  }
+  if (!started) {
     setState(DeviceState::Error, "Invalid backend URL");
     return false;
   }
@@ -507,14 +540,19 @@ bool connectSocket() {
   String host;
   String path;
   uint16_t port = 0;
-  if (!parseWebsocketUrl(gSessionUrl, &host, &port, &path)) {
-    setState(DeviceState::Error, "Expected ws:// session URL");
+  bool secure = false;
+  if (!parseWebsocketUrl(gSessionUrl, &host, &port, &path, &secure)) {
+    setState(DeviceState::Error, "Expected ws:// or wss:// URL");
     return false;
   }
   setState(DeviceState::ConnectingSession, host);
   path += (path.indexOf('?') >= 0 ? "&" : "?");
   path += "token=" + gConfig.deviceToken;
-  gSocket.begin(host.c_str(), port, path.c_str());
+  if (secure) {
+    gSocket.beginSSL(host.c_str(), port, path.c_str());
+  } else {
+    gSocket.begin(host.c_str(), port, path.c_str());
+  }
   gSocket.onEvent(handleSocketEvent);
   gSocket.setReconnectInterval(kReconnectIntervalMs);
   return true;

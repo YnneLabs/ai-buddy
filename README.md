@@ -37,6 +37,10 @@ docker compose --profile tunnel up -d
 Cloudflare routes `ai-buddy.evil-gamer.net` to the tunnel's local service at
 `http://backend:8000`; no router port-forwarding is required.
 
+The firmware accepts both local `http`/`ws` URLs and deployed `https`/`wss`
+URLs. A provisioned device can be migrated once using the two
+`AI_BUDDY_BACKEND_MIGRATE_*` settings in `local_config.h`.
+
 ## Firmware Del Buddy
 
 El cliente de red propio vive en [`firmware/ai_buddy_client/`](firmware/ai_buddy_client/).

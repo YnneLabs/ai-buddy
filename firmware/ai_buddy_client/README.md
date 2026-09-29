@@ -77,8 +77,8 @@ segundos. La pantalla mostrará `Router WPS`; presioná entonces el botón WPS f
 del router dentro de dos minutos. El Buddy guarda el SSID obtenido. Si todavía no
 tiene URL de backend y token, reabre el portal para completar sólo esos datos.
 
-La URL debe ser accesible desde la placa. Para el backend local, definí `AI_BUDDY_PUBLIC_BASE_URL` con esa misma URL antes de levantar Docker.
+La URL debe ser accesible desde la placa. Para el backend local, definí `AI_BUDDY_PUBLIC_BASE_URL` con esa misma URL antes de levantar Docker. Para el despliegue por Cloudflare Tunnel usá `https://ai-buddy.evil-gamer.net`.
 
 ## Contrato Esperado
 
-El gateway debe responder `session_url` con `ws://` durante desarrollo local. TLS y `wss://` se agregan en la Fase 7.
+El gateway puede responder `ws://` para desarrollo local o `wss://` para un backend desplegado. El cliente obtiene su configuración por `http://` o `https://` de acuerdo con la URL del backend.
