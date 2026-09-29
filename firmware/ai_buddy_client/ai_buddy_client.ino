@@ -51,6 +51,7 @@ constexpr uint32_t kReconnectIntervalMs = 5000;
 constexpr uint32_t kResetHoldMs = 3000;
 constexpr uint32_t kWpsHoldMs = 1500;
 constexpr uint32_t kWpsTimeoutMs = 120000;
+constexpr uint8_t kFullRefreshAfterPartialUpdates = 32;
 
 using DisplayType = GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT>;
 DisplayType gDisplay(GxEPD2_154_D67(board::PIN_EPD_CS, board::PIN_EPD_DC, board::PIN_EPD_RST, board::PIN_EPD_BUSY));
@@ -99,6 +100,8 @@ bool gWpsActive = false;
 bool gWpsSucceeded = false;
 uint32_t gWpsStartedAtMs = 0;
 bool gAudioReady = false;
+bool gDisplayHasFullFrame = false;
+uint8_t gPartialRefreshCount = 0;
 
 struct BatteryReading {
   bool valid;
@@ -337,7 +340,19 @@ void renderState() {
   } else {
     Serial.println("BATTERY voltage=invalid");
   }
-  gDisplay.setFullWindow();
+  // The panel's partial waveform changes pixels without the full black/white flash.
+  // A periodic full pass prevents accumulated ghosting after extended use.
+  const bool fullRefresh = !gDisplayHasFullFrame || gPartialRefreshCount >= kFullRefreshAfterPartialUpdates;
+  if (fullRefresh) {
+    gDisplay.setFullWindow();
+    gDisplayHasFullFrame = true;
+    gPartialRefreshCount = 0;
+    Serial.println("DISPLAY full refresh");
+  } else {
+    gDisplay.setPartialWindow(0, 0, gDisplay.width(), gDisplay.height());
+    ++gPartialRefreshCount;
+    Serial.printf("DISPLAY partial refresh %u/%u\n", gPartialRefreshCount, kFullRefreshAfterPartialUpdates);
+  }
   gDisplay.firstPage();
   do {
     gDisplay.fillScreen(GxEPD_WHITE);
