@@ -111,6 +111,8 @@ Entregable: firmware que conecta a nuestro backend sin servicios externos.
 
 Entregable: presionar BOOT, hablar, recibir respuesta audible y visible.
 
+- Interaccion principal: un toque de `BOOT` inicia la escucha; el siguiente toque finaliza la captura y envia el turno.
+- `BOOT` mantenido durante tres segundos conserva el reset de configuracion; `PWR` conserva WPS.
 - Confirmar y probar el camino de audio del hardware: I2S, ES8311, microfono y parlante.
 - Definir el protocolo binario de `audio_chunk` y `audio_end`, con limites de duracion, tamanos y backpressure.
 - Agregar STT local y conservar la transcripcion por sesion efimera.
@@ -191,7 +193,7 @@ confiable emojis ni UTF-8.
 ## Siguiente Entrega: Fase 3
 
 1. Auditar el codec y el pinout de audio con una grabacion/reproduccion local.
-2. Implementar captura push-to-talk desde `BOOT` sin romper el evento de texto actual.
+2. Implementar captura toggle desde `BOOT`: primer toque inicia, segundo toque envia y tres segundos reinicia configuracion.
 3. Definir y probar audio WebSocket con muestras cortas antes de integrar STT/TTS.
 4. Integrar STT y TTS locales, instrumentando tiempos por etapa.
 5. Hacer una demo completa de pregunta y respuesta hablada.
