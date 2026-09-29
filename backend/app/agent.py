@@ -64,7 +64,8 @@ class BuddyAgent:
         payload = {
             "model": self.settings.model,
             "stream": False,
-            # Gemma 4 otherwise spends a short device response in hidden reasoning.
+            "keep_alive": "30m",
+            # Gemma otherwise spends a short device response in hidden reasoning.
             "think": False,
             "messages": self._messages(device_id, user_message, task, memories or [], history or []),
             "options": {"temperature": 0.4, "num_predict": max_predict},
