@@ -3,6 +3,7 @@ import os
 os.environ["AI_BUDDY_AGENT_PROVIDER"] = "mock"
 os.environ["AI_BUDDY_STT_PROVIDER"] = "mock"
 os.environ["AI_BUDDY_TTS_PROVIDER"] = "mock"
+os.environ["AI_BUDDY_DATA_DIR"] = "/tmp/ai-buddy-tests"
 
 from fastapi.testclient import TestClient
 
@@ -86,3 +87,13 @@ def test_websocket_receives_pcm_and_returns_transcription():
         "bytes": 6400,
     }
     assert speech == b"\x00\x00\x00\x00" * 1600
+
+
+def test_websocket_blocks_sensitive_action_without_confirmation():
+    with client.websocket_connect(f"/device/session?token={TOKEN}") as websocket:
+        websocket.send_json({"type": "hello", "device_id": "buddy-01"})
+        websocket.receive_json()
+        websocket.send_json({"type": "action_request", "action": "send_message"})
+        blocked = websocket.receive_json()
+
+    assert blocked == {"type": "action_blocked", "reason": "confirmation_required"}

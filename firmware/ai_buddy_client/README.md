@@ -29,6 +29,14 @@ texto y la conexion al backend se mantienen disponibles.
 TTS, STT, streaming de audio y deep sleep quedan para los siguientes hitos de
 la fase.
 
+## Memoria Personal
+
+Al terminar una consulta que empiece con `recuerda que`, `recorda que` o `guarda
+que`, el Buddy pide aprobacion en e-paper. Pulsar `BOOT` guarda la memoria local;
+un toque corto de `PWR` la descarta. Mientras exista esa confirmacion pendiente,
+los botones no inician una grabacion ni WPS. Mantener `PWR` 1.5 segundos sigue
+iniciando WPS y mantener `BOOT` tres segundos conserva el reset de configuracion.
+
 El LED integrado en `GPIO3` queda encendido mientras el firmware esta activo. Al
 apagar o entrar en deep sleep se apaga; el hardware validado solo expone este
 indicador binario, no un LED RGB para representar colores distintos.

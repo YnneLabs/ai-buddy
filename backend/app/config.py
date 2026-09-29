@@ -20,6 +20,7 @@ class Settings:
     tts_provider: str
     tts_voice: str
     tts_timeout_seconds: float
+    data_dir: str
 
 
 def get_settings() -> Settings:
@@ -39,4 +40,5 @@ def get_settings() -> Settings:
         tts_provider=os.getenv("AI_BUDDY_TTS_PROVIDER", "piper"),
         tts_voice=os.getenv("AI_BUDDY_TTS_VOICE", "es_AR-daniela-high"),
         tts_timeout_seconds=float(os.getenv("AI_BUDDY_TTS_TIMEOUT_SECONDS", "90")),
+        data_dir=os.getenv("AI_BUDDY_DATA_DIR", "/tmp/ai-buddy"),
     )

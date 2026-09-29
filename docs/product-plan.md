@@ -121,16 +121,15 @@ Entregable: presionar BOOT, hablar, recibir respuesta audible y visible.
 - Mostrar transcripcion y respuesta breve en e-paper; medir latencia de captura a voz.
 - Criterio de salida: presionar `BOOT`, hablar una pregunta y oir una respuesta en menos de 8 segundos en LAN.
 
-### Fase 4: Agente Personal Basico - Planificada
+### Fase 4: Agente Personal Basico - En Progreso
 
 Entregable: asistente que recuerda contexto simple y responde como producto util.
 
-- Definir identidad del asistente en un prompt/config versionado.
-- Agregar memoria local con aprobacion explicita.
-- Agregar historial corto por dispositivo/sesion.
-- Implementar confirmacion para acciones sensibles.
-- Agregar panel o CLI para ver memoria, logs y permisos.
-- Tests: memoria opt-in, olvido de memoria, respuesta con contexto, accion bloqueada sin confirmacion.
+- Identidad versionada, memoria SQLite local e historial breve implementados.
+- `BOOT` aprueba y un toque corto de `PWR` rechaza una propuesta de memoria.
+- CLI para inspeccionar memoria, historial y politica de permisos implementado.
+- Acciones sensibles bloqueadas mientras no tengan una confirmacion dedicada.
+- Tests: memoria opt-in, olvido, contexto y accion bloqueada incluidos.
 
 ### Fase 5: Herramientas Personales - Planificada
 

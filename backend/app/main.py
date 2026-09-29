@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Web
 
 from .agent import AgentSettings, BuddyAgent
 from .config import Settings, get_settings
+from .memory import BuddyMemory
 from .transcription import BuddyTranscriber, TranscriptionSettings
 from .speech import BuddySpeech, SpeechSettings, TARGET_CHANNELS, TARGET_SAMPLE_RATE
 
@@ -71,6 +72,10 @@ def get_speech(settings: Settings) -> BuddySpeech:
     )
 
 
+def get_memory(settings: Settings) -> BuddyMemory:
+    return BuddyMemory(settings.data_dir)
+
+
 @app.get("/healthz")
 def healthz(settings: Settings = Depends(get_settings)) -> Dict[str, str]:
     return {
@@ -97,6 +102,7 @@ def device_config(
             "audio_upload": True,
             "display_text": True,
             "remote_commands": True,
+            "approved_memory": True,
         },
     }
 
@@ -147,7 +153,11 @@ async def device_session(
                     logger.info("audio transcribed device_id=%s bytes=%s", device_id, len(audio_bytes))
                     await websocket.send_json({"type": "transcription", "text": transcript})
                     try:
-                        response_text = await get_agent(settings).respond_to_transcript(device_id, transcript)
+                        memory = get_memory(settings)
+                        response_text = await get_agent(settings).respond_to_transcript(
+                            device_id, transcript, memory.list_memories(device_id), memory.recent_turns(device_id)
+                        )
+                        memory.append_turn(device_id, transcript, response_text)
                         await websocket.send_json({"type": "show_text", "text": response_text})
                         speech = await get_speech(settings).synthesize(response_text)
                         if len(speech) > 512000:
@@ -169,6 +179,12 @@ async def device_session(
                             len(speech),
                             (len(speech) + MAX_DEVICE_AUDIO_CHUNK_BYTES - 1) // MAX_DEVICE_AUDIO_CHUNK_BYTES,
                         )
+                        proposal = memory.propose_from_transcript(device_id, transcript)
+                        if proposal is not None:
+                            request_id, content = proposal
+                            await websocket.send_json(
+                                {"type": "memory_confirmation", "request_id": request_id, "content": content}
+                            )
                     except Exception as exc:  # Preserve the session if the model or TTS fails.
                         logger.warning("voice response failed device_id=%s error=%s", device_id, exc)
                         await websocket.send_json({"type": "error", "code": "voice_response_failed"})
@@ -230,6 +246,23 @@ async def device_session(
                         "text": response_text,
                     }
                 )
+            elif event_type in {"memory_confirm", "memory_reject"}:
+                request_id = str(message.get("request_id", ""))
+                memory = get_memory(settings)
+                if event_type == "memory_confirm":
+                    saved = memory.confirm(device_id, request_id)
+                    if saved:
+                        await websocket.send_json({"type": "memory_saved", "memory_id": saved.id})
+                    else:
+                        await websocket.send_json({"type": "error", "code": "memory_not_found"})
+                else:
+                    rejected = memory.reject(device_id, request_id)
+                    if rejected:
+                        await websocket.send_json({"type": "memory_rejected"})
+                    else:
+                        await websocket.send_json({"type": "error", "code": "memory_not_found"})
+            elif event_type == "action_request":
+                await websocket.send_json({"type": "action_blocked", "reason": "confirmation_required"})
             else:
                 logger.info("event received session_id=%s device_id=%s type=%s", session_id, device_id, event_type)
                 await websocket.send_json({"type": "event_received", "event_type": event_type})

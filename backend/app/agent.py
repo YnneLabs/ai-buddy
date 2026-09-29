@@ -8,6 +8,9 @@ import re
 
 import httpx
 
+from .identity import IDENTITY_VERSION, SYSTEM_PROMPT
+from .memory import ConversationTurn, Memory
+
 
 logger = logging.getLogger("ai_buddy.agent")
 
@@ -27,10 +30,21 @@ class BuddyAgent:
     async def respond_to_button(self, device_id: str) -> str:
         return await self._respond(device_id, "The user pressed the button.", "greet the user and confirm that you are ready")
 
-    async def respond_to_transcript(self, device_id: str, transcript: str) -> str:
-        return await self._respond(device_id, transcript, "answer the user's spoken request helpfully")
+    async def respond_to_transcript(
+        self, device_id: str, transcript: str, memories: list[Memory], history: list[ConversationTurn]
+    ) -> str:
+        return await self._respond(
+            device_id, transcript, "answer the user's spoken request helpfully", memories=memories, history=history
+        )
 
-    async def _respond(self, device_id: str, user_message: str, task: str) -> str:
+    async def _respond(
+        self,
+        device_id: str,
+        user_message: str,
+        task: str,
+        memories: list[Memory] | None = None,
+        history: list[ConversationTurn] | None = None,
+    ) -> str:
         if self.settings.provider == "mock":
             return "Recibi tu mensaje."
         if self.settings.provider != "ollama":
@@ -41,18 +55,7 @@ class BuddyAgent:
             "stream": False,
             # Gemma 4 otherwise spends a short device response in hidden reasoning.
             "think": False,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are AI Buddy, a private desk companion. Respond in Spanish, "
-                        "warmly and concisely. "
-                        f"Please {task} in one or two short sentences. Use plain ASCII only: "
-                        "no emoji and no accented characters."
-                    ),
-                },
-                {"role": "user", "content": f"Buddy device: {device_id}. User message: {user_message}"},
-            ],
+            "messages": self._messages(device_id, user_message, task, memories or [], history or []),
             "options": {"temperature": 0.4, "num_predict": 60},
         }
         try:
@@ -67,3 +70,16 @@ class BuddyAgent:
         if not isinstance(content, str) or not content.strip():
             return "Estoy listo, pero no recibi una respuesta valida del modelo."
         return re.sub(r"\s+", " ", content).strip()[:220]
+
+    @staticmethod
+    def _messages(
+        device_id: str, user_message: str, task: str, memories: list[Memory], history: list[ConversationTurn]
+    ) -> list[dict[str, str]]:
+        messages = [{"role": "system", "content": f"Identity version: {IDENTITY_VERSION}.\n{SYSTEM_PROMPT}\nTask: {task}"}]
+        if memories:
+            context = "\n".join(f"- {memory.content}" for memory in memories[:12])
+            messages.append({"role": "system", "content": f"Approved memories for this device:\n{context}"})
+        for turn in history[-4:]:
+            messages.extend(({"role": "user", "content": turn.user_text}, {"role": "assistant", "content": turn.assistant_text}))
+        messages.append({"role": "user", "content": f"Buddy device: {device_id}. User message: {user_message}"})
+        return messages

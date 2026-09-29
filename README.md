@@ -49,6 +49,23 @@ la respuesta con Piper antes de devolver PCM estereo de 16 kHz al Buddy. La voz
 predeterminada es `es_AR-daniela-high`; se conserva en el mismo volumen local de
 modelos y puede configurarse con `AI_BUDDY_TTS_PROVIDER` y `AI_BUDDY_TTS_VOICE`.
 
+## Memoria Local
+
+La Fase 4 agrega una identidad versionada, historial corto por dispositivo y
+memoria SQLite local. Decir `recuerda que ...`, `recorda que ...` o `guarda que
+...` nunca escribe datos de inmediato: el e-paper mostrara la propuesta, `BOOT`
+la aprueba y un toque corto de `PWR` la descarta. Solo los recuerdos aprobados
+forman parte del contexto de Gemma. Las acciones sensibles siguen bloqueadas
+hasta recibir un mecanismo de confirmacion dedicado en la Fase 5.
+
+Para inspeccionar los datos persistidos desde el contenedor:
+
+```sh
+docker compose exec backend python -m app.cli memories --device buddy-1D0470
+docker compose exec backend python -m app.cli history --device buddy-1D0470
+docker compose exec backend python -m app.cli permissions
+```
+
 ## Estado
 
 Incluye:

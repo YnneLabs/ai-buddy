@@ -59,6 +59,7 @@ enum class DeviceState : uint8_t {
   ConnectingSession,
   Listening,
   PlayingAudio,
+  MemoryConfirmation,
   Online,
   Error,
 };
@@ -75,6 +76,7 @@ DeviceConfig gConfig;
 DeviceState gState = DeviceState::Boot;
 String gStateDetail;
 String gSessionUrl;
+String gPendingMemoryId;
 bool gSocketConnected = false;
 bool gBootButtonDown = false;
 uint32_t gBootButtonPressedAtMs = 0;
@@ -106,6 +108,8 @@ const char* stateName(DeviceState state) {
       return "Listening";
     case DeviceState::PlayingAudio:
       return "Audio check";
+    case DeviceState::MemoryConfirmation:
+      return "Remember this?";
     case DeviceState::Online:
       return "Buddy online";
     case DeviceState::Error:
@@ -449,6 +453,21 @@ void handleSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
       return;
     }
     setState(DeviceState::PlayingAudio, "Buddy speaking");
+  } else if (strcmp(messageType, "memory_confirmation") == 0) {
+    gPendingMemoryId = String(message["request_id"] | "");
+    if (gPendingMemoryId.isEmpty()) {
+      setState(DeviceState::Error, "Invalid memory request");
+      return;
+    }
+    setState(DeviceState::MemoryConfirmation, String(message["content"] | "BOOT yes PWR no"));
+  } else if (strcmp(messageType, "memory_saved") == 0) {
+    gPendingMemoryId = "";
+    setState(DeviceState::Online, "Memory saved");
+  } else if (strcmp(messageType, "memory_rejected") == 0) {
+    gPendingMemoryId = "";
+    setState(DeviceState::Online, "Memory not saved");
+  } else if (strcmp(messageType, "action_blocked") == 0) {
+    setState(DeviceState::Online, "Action needs confirmation");
   } else if (strcmp(messageType, "error") == 0) {
     setState(DeviceState::Error, String(message["code"] | "Audio error"));
   }
@@ -523,6 +542,14 @@ void handleBootButton() {
       clearConfig();
       ESP.restart();
     }
+    if (!gPendingMemoryId.isEmpty()) {
+      JsonDocument confirmation;
+      confirmation["type"] = "memory_confirm";
+      confirmation["request_id"] = gPendingMemoryId;
+      sendJson(confirmation);
+      setState(DeviceState::MemoryConfirmation, "Saving memory");
+      return;
+    }
     if (gAudio.isRecording()) {
       gAudio.finishRecording();
       Serial.printf("AUDIO captured bytes=%u\n", static_cast<unsigned>(gAudio.recordedBytes()));
@@ -573,6 +600,14 @@ void handlePowerButton() {
   if (!pressed && gPowerButtonDown) {
     const uint32_t heldMs = millis() - gPowerButtonPressedAtMs;
     gPowerButtonDown = false;
+    if (heldMs < kWpsHoldMs && !gPendingMemoryId.isEmpty()) {
+      JsonDocument rejection;
+      rejection["type"] = "memory_reject";
+      rejection["request_id"] = gPendingMemoryId;
+      sendJson(rejection);
+      setState(DeviceState::MemoryConfirmation, "Discarding memory");
+      return;
+    }
     if (heldMs >= kWpsHoldMs) {
       startWps();
     }

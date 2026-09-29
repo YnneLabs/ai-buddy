@@ -18,13 +18,16 @@ services:
       AI_BUDDY_TTS_PROVIDER: ${AI_BUDDY_TTS_PROVIDER:-piper}
       AI_BUDDY_TTS_VOICE: ${AI_BUDDY_TTS_VOICE:-es_AR-daniela-high}
       AI_BUDDY_TTS_TIMEOUT_SECONDS: ${AI_BUDDY_TTS_TIMEOUT_SECONDS:-90}
+      AI_BUDDY_DATA_DIR: /data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "${AI_BUDDY_PORT:-8000}:8000"
     volumes:
       - stt_models:/root/.cache/huggingface
+      - buddy_data:/data
     restart: unless-stopped
 
 volumes:
   stt_models:
+  buddy_data:
