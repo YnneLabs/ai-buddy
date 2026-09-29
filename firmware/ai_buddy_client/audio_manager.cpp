@@ -36,6 +36,7 @@ constexpr uint8_t kRegDac32 = 0x32;
 constexpr uint8_t kRegDac37 = 0x37;
 constexpr uint8_t kRegGpio44 = 0x44;
 constexpr uint8_t kRegGp45 = 0x45;
+constexpr uint8_t kDacVolume80Percent = 0xCC;
 
 }  // namespace
 
@@ -231,6 +232,7 @@ void AudioManager::startCodecPath(bool enableAdc, bool enableDac) {
   writeCodecRegister(kRegDac37, 0x08);
   writeCodecRegister(kRegGp45, 0x00);
   writeCodecRegister(kRegGpio44, 0x58);
+  writeCodecRegister(kRegDac32, enableDac ? kDacVolume80Percent : 0x00);
   const uint8_t mute = readCodecRegister(kRegDac31) & 0x9F;
   writeCodecRegister(kRegDac31, enableDac ? mute : static_cast<uint8_t>(mute | 0x60));
 }
