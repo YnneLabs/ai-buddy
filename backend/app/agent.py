@@ -37,6 +37,15 @@ class BuddyAgent:
             device_id, transcript, "answer the user's spoken request helpfully", memories=memories, history=history
         )
 
+    async def respond_to_small_talk(self, device_id: str, transcript: str) -> str:
+        return await self._respond(
+            device_id,
+            transcript,
+            "reply in Spanish to this brief greeting or acknowledgement in one short sentence",
+            max_predict=24,
+            max_chars=120,
+        )
+
     async def _respond(
         self,
         device_id: str,
@@ -44,6 +53,8 @@ class BuddyAgent:
         task: str,
         memories: list[Memory] | None = None,
         history: list[ConversationTurn] | None = None,
+        max_predict: int = 60,
+        max_chars: int = 220,
     ) -> str:
         if self.settings.provider == "mock":
             return "Recibi tu mensaje."
@@ -56,7 +67,7 @@ class BuddyAgent:
             # Gemma 4 otherwise spends a short device response in hidden reasoning.
             "think": False,
             "messages": self._messages(device_id, user_message, task, memories or [], history or []),
-            "options": {"temperature": 0.4, "num_predict": 60},
+            "options": {"temperature": 0.4, "num_predict": max_predict},
         }
         try:
             async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
@@ -69,7 +80,7 @@ class BuddyAgent:
         content = response.json().get("message", {}).get("content", "")
         if not isinstance(content, str) or not content.strip():
             return "Estoy listo, pero no recibi una respuesta valida del modelo."
-        return re.sub(r"\s+", " ", content).strip()[:220]
+        return re.sub(r"\s+", " ", content).strip()[:max_chars]
 
     @staticmethod
     def _messages(

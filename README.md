@@ -46,6 +46,10 @@ can issue the callback. Set `AI_BUDDY_GROKBOT_RESPONSE_MAX_CHARS=160` (or less)
 to keep spoken answers quick; gateway logs report STT, dispatch, callback, and
 TTS timings separately.
 
+`FastRouter` keeps greetings, acknowledgements, and short social exchanges on
+local Gemma. Reminders, information queries, and every non-trivial request use
+Grokbot, which has the external context and action workflow.
+
 ## Firmware Del Buddy
 
 El cliente de red propio vive en [`firmware/ai_buddy_client/`](firmware/ai_buddy_client/).

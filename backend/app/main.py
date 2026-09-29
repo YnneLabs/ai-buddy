@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from .agent import AgentSettings, BuddyAgent
 from .config import Settings, get_settings
+from .fast_router import FastRouter
 from .memory import BuddyMemory
 from .grokbot import GrokbotSettings, GrokbotWebhook
 from .transcription import BuddyTranscriber, TranscriptionSettings
@@ -50,6 +51,7 @@ class DeviceConnections:
 
 
 connections = DeviceConnections()
+fast_router = FastRouter()
 
 
 def require_device_token(
@@ -267,7 +269,13 @@ async def device_session(
                     try:
                         memory = get_memory(settings)
                         grokbot = get_grokbot(settings)
-                        if grokbot.enabled:
+                        route = fast_router.route(transcript)
+                        logger.info("voice route device_id=%s target=%s reason=%s", device_id, route.target, route.reason)
+                        if route.target == "gemma":
+                            response_text = await get_agent(settings).respond_to_small_talk(device_id, transcript)
+                            memory.append_turn(device_id, transcript, response_text)
+                            await send_spoken_reply(websocket, settings, device_id, response_text)
+                        elif grokbot.enabled:
                             request_id = memory.create_external_request(device_id, transcript)
                             dispatch_started_at = perf_counter()
                             await grokbot.dispatch(request_id, device_id, transcript)
