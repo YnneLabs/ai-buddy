@@ -1,4 +1,26 @@
-# AI Buddy Personal Agent Plan
+# AI Buddy Personal Agent Roadmap
+
+**Actualizado:** 2026-09-28
+
+## Estado Del Producto
+
+El primer vertical slice ya funciona en hardware real. El Buddy arranca, se
+conecta al Wi-Fi configurado, obtiene su configuracion del gateway propio,
+mantiene una sesion WebSocket y muestra en e-paper una respuesta producida por
+Gemma local al presionar `BOOT`.
+
+| Area | Estado | Evidencia |
+| --- | --- | --- |
+| Gateway propio | Completo | FastAPI en Docker con `GET /device/config` y `WS /device/session`. |
+| Red y provisionamiento | Completo | Portal local, WPS y valores de provisionamiento locales ignorados por Git. |
+| Firmware propio | Completo para texto | ESP32-S3 sin dependencia de XiaoZhi; estados en e-paper y reconexion. |
+| Gemma | Completo para texto | `gemma4:e4b` en Ollama responde eventos de boton. |
+| Audio, memoria y tools | Pendiente | Siguiente bloque de producto. |
+
+La ultima sesion verificada asigno al dispositivo `buddy-1D0470` una IP de LAN
+dinamica y establecio una sesion autenticada contra el gateway. No se debe
+depender de esa IP: el dispositivo obtiene una direccion nueva por DHCP cuando
+la red lo requiera.
 
 ## Vision
 
@@ -57,49 +79,46 @@ El agente debe separar claramente:
 
 ## Fases
 
-### Fase 0: Base Del Producto
+### Fase 0: Base Del Producto - Completada
 
 Entregable: este plan versionado y un repo preparado para crecer.
 
 - Definir vision, arquitectura y fases.
 - Mantener el bring-up Arduino como referencia de hardware.
 - No mezclar todavia backend nuevo con firmware experimental.
-- Documentar el estado real del dispositivo actual: firmware cargado, IP, endpoint OTA y causa de falla.
+- Documentar el estado real del dispositivo y retirar la dependencia de XiaoZhi.
 
-### Fase 1: Backend Minimo Local
+### Fase 1: Backend Minimo Local - Completada
 
 Entregable: un backend local que el buddy pueda contactar en la red.
 
-- Crear `backend/` con FastAPI o framework equivalente.
-- Implementar `GET /device/config`.
-- Implementar `WS /device/session` con handshake, ping/pong y logs.
-- Agregar `docker-compose.yml` para levantar backend local.
-- Agregar `.env.example` con host, puerto, token de dispositivo y modelo.
-- Tests: health check, config endpoint, websocket handshake.
+- `backend/` usa FastAPI y `docker-compose.yml` levanta el gateway en el puerto 8000.
+- `GET /device/config` y `WS /device/session` implementan token, handshake, ping/pong y logs.
+- `AI_BUDDY_PUBLIC_BASE_URL` evita que un dispositivo LAN reciba una URL `127.0.0.1` invalida.
+- Las pruebas cubren health check, autenticacion, contrato de configuracion y WebSocket.
 
-### Fase 2: Firmware Cliente Propio
+### Fase 2: Firmware Cliente Propio - Completada Para Texto
 
 Entregable: firmware que conecta a nuestro backend sin servicios externos.
 
-- Crear `firmware/` como base limpia para el cliente del buddy.
-- Reutilizar pinout, audio, display, botones, sensor y sleep del bring-up.
-- Agregar Wi-Fi provisioning y persistencia de configuracion.
-- Implementar `GET /device/config` y `WS /device/session`.
-- Mostrar estados en e-paper: offline, connecting, online, listening, thinking, speaking, error.
-- Tests manuales: boot, Wi-Fi, config fetch, websocket conectado, reconexion tras apagar backend.
+- `firmware/ai_buddy_client` es un cliente ESP32-S3 propio con pantalla, botones, portal Wi-Fi, WPS y configuracion persistente.
+- Implementa `GET /device/config`, `WS /device/session`, evento `boot` y evento `button`.
+- El e-paper muestra arranque, provisionamiento, conexion Wi-Fi, configuracion, sesion, online y errores.
+- `local_config.h` permite inyectar credenciales de un entorno de flasheo sin incluirlas en Git.
+- Validado manualmente: cold boot, Wi-Fi, fetch de configuracion, WebSocket autenticado y respuesta de Gemma renderizada.
 
-### Fase 3: Voz End-To-End
+### Fase 3: Voz End-To-End - Siguiente
 
 Entregable: presionar BOOT, hablar, recibir respuesta audible y visible.
 
-- Enviar audio del firmware al backend.
-- Agregar STT o modelo multimodal de audio en backend.
-- Generar respuesta textual del agente.
-- Agregar TTS y stream de audio de vuelta al dispositivo.
-- Mostrar transcripcion/respuesta corta en e-paper.
-- Medir latencia total y errores.
+- Confirmar y probar el camino de audio del hardware: I2S, ES8311, microfono y parlante.
+- Definir el protocolo binario de `audio_chunk` y `audio_end`, con limites de duracion, tamanos y backpressure.
+- Agregar STT local y conservar la transcripcion por sesion efimera.
+- Reusar Gemma para la respuesta textual y agregar TTS local con audio de vuelta al dispositivo.
+- Mostrar transcripcion y respuesta breve en e-paper; medir latencia de captura a voz.
+- Criterio de salida: presionar `BOOT`, hablar una pregunta y oir una respuesta en menos de 8 segundos en LAN.
 
-### Fase 4: Agente Personal Basico
+### Fase 4: Agente Personal Basico - Planificada
 
 Entregable: asistente que recuerda contexto simple y responde como producto util.
 
@@ -110,7 +129,7 @@ Entregable: asistente que recuerda contexto simple y responde como producto util
 - Agregar panel o CLI para ver memoria, logs y permisos.
 - Tests: memoria opt-in, olvido de memoria, respuesta con contexto, accion bloqueada sin confirmacion.
 
-### Fase 5: Herramientas Personales
+### Fase 5: Herramientas Personales - Planificada
 
 Entregable: el buddy puede hacer trabajo real con herramientas autorizadas.
 
@@ -120,7 +139,7 @@ Entregable: el buddy puede hacer trabajo real con herramientas autorizadas.
 - Politicas de permisos por tool: lectura libre, escritura con confirmacion, acciones peligrosas bloqueadas.
 - Tests: tool call exitoso, permiso denegado, confirmacion requerida, error recuperable.
 
-### Fase 6: Experiencia De Companion
+### Fase 6: Experiencia De Companion - Planificada
 
 Entregable: se siente como un objeto vivo y confiable, no como una terminal.
 
@@ -131,7 +150,7 @@ Entregable: se siente como un objeto vivo y confiable, no como una terminal.
 - Deep sleep robusto y wake confiable.
 - Tests: bateria, sleep/wake, perdida de red, backend caido, TTS fallando.
 
-### Fase 7: Deploy Privado
+### Fase 7: Deploy Privado - Planificada
 
 Entregable: backend accesible desde dominio propio.
 
@@ -142,7 +161,7 @@ Entregable: backend accesible desde dominio propio.
 - Script de instalacion local/VPS.
 - Tests: renovacion TLS, reconexion remota, endpoint publico, dispositivo autorizado/no autorizado.
 
-### Fase 8: Demo Y Narrativa
+### Fase 8: Demo Y Narrativa - Planificada
 
 Entregable: demo publica y descripcion del proyecto.
 
@@ -152,7 +171,7 @@ Entregable: demo publica y descripcion del proyecto.
 - Crear README de uso para desarrolladores.
 - Preparar video corto de funcionamiento.
 
-## Primer Milestone Ejecutable
+## Primer Milestone Ejecutable - Completado
 
 El primer milestone no debe intentar resolver todo. Debe demostrar la columna vertebral:
 
@@ -163,16 +182,26 @@ El primer milestone no debe intentar resolver todo. Debe demostrar la columna ve
 5. El backend responde con texto.
 6. El buddy muestra ese texto en e-paper.
 
-Solo despues de esa base se agrega audio end-to-end.
+Este milestone esta verificado con Gemma real. Para respuestas breves, el
+gateway envia `think: false` a Ollama: Gemma 4 puede consumir todo el limite de
+tokens en razonamiento interno antes de producir texto visible. La salida se
+restringe a ASCII porque la fuente actual del e-paper no cubre de forma
+confiable emojis ni UTF-8.
 
-## Estado Actual Conocido
+## Siguiente Entrega: Fase 3
 
-- El bring-up Arduino funciona como referencia de hardware.
-- La placa conectada por USB arranca un firmware llamado `gemmabuddy` version `0.1.0`.
-- El buddy se conecta correctamente al Wi-Fi y obtiene IP `192.168.1.26`.
-- La falla actual no es Wi-Fi: intenta consultar `http://192.168.1.11:8000/xiaozhi/ota/` y ese host/puerto no responde.
-- La Mac actual esta en `192.168.1.4`; no hay backend escuchando en `:8000`.
-- El repo contiene una copia de XiaoZhi en `tmp_xiaozhi_src`, pero el producto nuevo no debe depender de servicios XiaoZhi oficiales.
+1. Auditar el codec y el pinout de audio con una grabacion/reproduccion local.
+2. Implementar captura push-to-talk desde `BOOT` sin romper el evento de texto actual.
+3. Definir y probar audio WebSocket con muestras cortas antes de integrar STT/TTS.
+4. Integrar STT y TTS locales, instrumentando tiempos por etapa.
+5. Hacer una demo completa de pregunta y respuesta hablada.
+
+## Riesgos Y Decisiones Actuales
+
+- El backend LAN depende de que `AI_BUDDY_PUBLIC_BASE_URL` coincida con la IP o dominio visible por el Buddy. La Fase 7 elimina esta dependencia con un dominio y TLS.
+- El token por defecto solo sirve para desarrollo local; se reemplazara por tokens unicos por dispositivo antes de exponer el servicio.
+- El ESP32 no ejecuta inferencia: Gemma 4 se ejecuta en Ollama en el host, una seleccion adecuada para mantener el dispositivo ligero y dar respuestas con baja latencia en LAN.
+- La Fase 3 debe validar primero el codec fisico antes de comprometer un proveedor de STT/TTS.
 
 ## Criterio De Exito
 
