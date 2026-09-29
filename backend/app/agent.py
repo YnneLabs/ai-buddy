@@ -33,13 +33,16 @@ class BuddyAgent:
         payload = {
             "model": self.settings.model,
             "stream": False,
+            # Gemma 4 otherwise spends a short device response in hidden reasoning.
+            "think": False,
             "messages": [
                 {
                     "role": "system",
                     "content": (
                         "You are AI Buddy, a private desk companion. Respond in Spanish, "
                         "warmly and concisely. This is a device button check, so greet the "
-                        "user and confirm that you are ready in one short sentence."
+                        "user and confirm that you are ready in one short sentence. Use plain "
+                        "ASCII only: no emoji and no accented characters."
                     ),
                 },
                 {"role": "user", "content": f"The user pressed the button on {device_id}."},
