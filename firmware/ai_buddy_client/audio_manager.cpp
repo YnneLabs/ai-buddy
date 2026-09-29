@@ -15,6 +15,8 @@ constexpr uint8_t kRegClock3 = 0x03;
 constexpr uint8_t kRegClock4 = 0x04;
 constexpr uint8_t kRegClock5 = 0x05;
 constexpr uint8_t kRegClock6 = 0x06;
+constexpr uint8_t kRegClock7 = 0x07;
+constexpr uint8_t kRegClock8 = 0x08;
 constexpr uint8_t kRegSdpIn = 0x09;
 constexpr uint8_t kRegSdpOut = 0x0A;
 constexpr uint8_t kRegSystem0B = 0x0B;
@@ -70,7 +72,6 @@ bool AudioManager::startRecording() {
   setAmplifierEnabled(false);
   stopCodecPath();
   startCodecPath(true, false);
-  i2s_zero_dma_buffer(kI2SPort);
   return true;
 }
 
@@ -81,7 +82,7 @@ void AudioManager::captureStep() {
   const size_t remaining = kMaxBytes - recordedBytes_;
   const size_t requested = min(remaining, kChunkBytes);
   size_t received = 0;
-  i2s_read(kI2SPort, buffer_ + recordedBytes_, requested, &received, pdMS_TO_TICKS(20));
+  i2s_channel_read(rxChannel_, buffer_ + recordedBytes_, requested, &received, 20);
   recordedBytes_ += received;
 }
 
@@ -107,7 +108,6 @@ void AudioManager::playRecording() {
   setAmplifierEnabled(true);
   stopCodecPath();
   startCodecPath(false, true);
-  i2s_zero_dma_buffer(kI2SPort);
   for (size_t offset = 0; offset < recordedBytes_; offset += kChunkBytes) {
     writeChunk(buffer_ + offset, min(kChunkBytes, recordedBytes_ - offset));
   }
@@ -137,17 +137,28 @@ void AudioManager::shutdown() {
     heap_caps_free(buffer_);
     buffer_ = nullptr;
   }
+  if (txChannel_ != nullptr) {
+    i2s_channel_disable(txChannel_);
+    i2s_del_channel(txChannel_);
+    txChannel_ = nullptr;
+  }
+  if (rxChannel_ != nullptr) {
+    i2s_channel_disable(rxChannel_);
+    i2s_del_channel(rxChannel_);
+    rxChannel_ = nullptr;
+  }
   ready_ = false;
 }
 
 bool AudioManager::initCodec() {
   delay(20);
   return writeCodecRegister(kRegGpio44, 0x08) &&
+         writeCodecRegister(kRegGpio44, 0x08) &&
          writeCodecRegister(kRegClock1, 0x30) &&
          writeCodecRegister(kRegClock2, 0x00) &&
          writeCodecRegister(kRegClock3, 0x10) &&
          writeCodecRegister(kRegAdc16, 0x24) &&
-         writeCodecRegister(kRegClock4, 0x10) &&
+         writeCodecRegister(kRegClock4, 0x20) &&
          writeCodecRegister(kRegClock5, 0x00) &&
          writeCodecRegister(kRegSystem0B, 0x00) &&
          writeCodecRegister(kRegSystem0C, 0x00) &&
@@ -156,6 +167,8 @@ bool AudioManager::initCodec() {
          writeCodecRegister(kRegReset, 0x80) &&
          writeCodecRegister(kRegClock1, 0x3F) &&
          writeCodecRegister(kRegClock6, 0x03) &&
+         writeCodecRegister(kRegClock7, 0x00) &&
+         writeCodecRegister(kRegClock8, 0xFF) &&
          writeCodecRegister(kRegSystem13, 0x10) &&
          writeCodecRegister(kRegAdc1B, 0x0A) &&
          writeCodecRegister(kRegAdc1C, 0x6A) &&
@@ -167,34 +180,31 @@ bool AudioManager::initCodec() {
 }
 
 bool AudioManager::initI2S() {
-  i2s_config_t config = {};
-  config.mode = static_cast<i2s_mode_t>(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_RX);
-  config.sample_rate = kSampleRate;
-  config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
-  config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-  config.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-  config.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
-  config.dma_buf_count = 8;
-  config.dma_buf_len = 256;
-  config.tx_desc_auto_clear = true;
-  config.fixed_mclk = kSampleRate * 256;
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
-  config.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-  config.bits_per_chan = I2S_BITS_PER_CHAN_16BIT;
-#endif
-  if (i2s_driver_install(kI2SPort, &config, 0, nullptr) != ESP_OK) {
+  i2s_chan_config_t channelConfig = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+  channelConfig.dma_desc_num = 8;
+  channelConfig.dma_frame_num = 256;
+  channelConfig.auto_clear = true;
+  if (i2s_new_channel(&channelConfig, &txChannel_, &rxChannel_) != ESP_OK) {
     return false;
   }
-  i2s_pin_config_t pins = {};
-  pins.mck_io_num = board::PIN_I2S_MCLK;
-  pins.bck_io_num = board::PIN_I2S_BCLK;
-  pins.ws_io_num = board::PIN_I2S_LRCK;
-  pins.data_out_num = board::PIN_I2S_DOUT;
-  pins.data_in_num = board::PIN_I2S_DIN;
-  if (i2s_set_pin(kI2SPort, &pins) != ESP_OK) {
+  i2s_std_config_t config = {
+      .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(kSampleRate),
+      .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+      .gpio_cfg = {
+          .mclk = static_cast<gpio_num_t>(board::PIN_I2S_MCLK),
+          .bclk = static_cast<gpio_num_t>(board::PIN_I2S_BCLK),
+          .ws = static_cast<gpio_num_t>(board::PIN_I2S_LRCK),
+          .dout = static_cast<gpio_num_t>(board::PIN_I2S_DOUT),
+          .din = static_cast<gpio_num_t>(board::PIN_I2S_DIN),
+      },
+  };
+  config.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+  if (i2s_channel_init_std_mode(txChannel_, &config) != ESP_OK ||
+      i2s_channel_init_std_mode(rxChannel_, &config) != ESP_OK ||
+      i2s_channel_enable(txChannel_) != ESP_OK ||
+      i2s_channel_enable(rxChannel_) != ESP_OK) {
     return false;
   }
-  i2s_zero_dma_buffer(kI2SPort);
   return true;
 }
 
@@ -255,7 +265,7 @@ void AudioManager::setAmplifierEnabled(bool enabled) {
 
 void AudioManager::writeChunk(const uint8_t* data, size_t bytes) {
   size_t written = 0;
-  i2s_write(kI2SPort, data, bytes, &written, portMAX_DELAY);
+  i2s_channel_write(txChannel_, data, bytes, &written, portMAX_DELAY);
 }
 
 void AudioManager::synthTone(uint16_t frequencyHz, uint16_t durationMs) {

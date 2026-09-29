@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <driver/i2s.h>
+#include <driver/i2s_std.h>
 
 class AudioManager {
  public:
@@ -28,7 +28,6 @@ class AudioManager {
   void writeChunk(const uint8_t* data, size_t bytes);
   void synthTone(uint16_t frequencyHz, uint16_t durationMs);
 
-  static constexpr i2s_port_t kI2SPort = I2S_NUM_0;
   static constexpr uint32_t kSampleRate = 16000;
   static constexpr size_t kChannels = 2;
   static constexpr size_t kBytesPerSample = 2;
@@ -41,4 +40,6 @@ class AudioManager {
   size_t recordedBytes_ = 0;
   bool recording_ = false;
   bool ready_ = false;
+  i2s_chan_handle_t txChannel_ = nullptr;
+  i2s_chan_handle_t rxChannel_ = nullptr;
 };

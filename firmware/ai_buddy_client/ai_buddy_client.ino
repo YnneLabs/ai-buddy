@@ -501,7 +501,7 @@ void handleBootButton() {
       return;
     }
     if (gAudioReady) {
-      gAudio.playTone(880, 80);
+      gAudio.playTone(880, 500);
       if (gAudio.startRecording()) {
         setState(DeviceState::Listening, "Press BOOT again to send");
         Serial.println("AUDIO recording started");
