@@ -17,6 +17,9 @@ class Settings:
     stt_model: str
     stt_language: str
     stt_timeout_seconds: float
+    tts_provider: str
+    tts_voice: str
+    tts_timeout_seconds: float
 
 
 def get_settings() -> Settings:
@@ -33,4 +36,7 @@ def get_settings() -> Settings:
         stt_model=os.getenv("AI_BUDDY_STT_MODEL", "base"),
         stt_language=os.getenv("AI_BUDDY_STT_LANGUAGE", "es"),
         stt_timeout_seconds=float(os.getenv("AI_BUDDY_STT_TIMEOUT_SECONDS", "90")),
+        tts_provider=os.getenv("AI_BUDDY_TTS_PROVIDER", "piper"),
+        tts_voice=os.getenv("AI_BUDDY_TTS_VOICE", "es_AR-daniela-high"),
+        tts_timeout_seconds=float(os.getenv("AI_BUDDY_TTS_TIMEOUT_SECONDS", "90")),
     )

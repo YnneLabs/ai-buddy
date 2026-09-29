@@ -118,6 +118,21 @@ void AudioManager::playRecording() {
   setAmplifierEnabled(false);
 }
 
+void AudioManager::playPcm(const uint8_t* data, size_t bytes) {
+  if (!ready_ || data == nullptr || bytes == 0) {
+    return;
+  }
+  setAmplifierEnabled(true);
+  stopCodecPath();
+  startCodecPath(false, true);
+  for (size_t offset = 0; offset < bytes; offset += kChunkBytes) {
+    writeChunk(data + offset, min(kChunkBytes, bytes - offset));
+  }
+  delay(60);
+  stopCodecPath();
+  setAmplifierEnabled(false);
+}
+
 void AudioManager::playTone(uint16_t frequencyHz, uint16_t durationMs) {
   if (!ready_) {
     return;

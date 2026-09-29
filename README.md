@@ -44,6 +44,11 @@ su descarga se realiza una unica vez y se conserva en el volumen Docker
 `AI_BUDDY_STT_MODEL` y `AI_BUDDY_STT_LANGUAGE`. Para pruebas sin modelo se puede
 usar `AI_BUDDY_STT_PROVIDER=mock`.
 
+Despues de transcribir, el gateway entrega el texto a Gemma 4 local y sintetiza
+la respuesta con Piper antes de devolver PCM estereo de 16 kHz al Buddy. La voz
+predeterminada es `es_AR-daniela-high`; se conserva en el mismo volumen local de
+modelos y puede configurarse con `AI_BUDDY_TTS_PROVIDER` y `AI_BUDDY_TTS_VOICE`.
+
 ## Estado
 
 Incluye:

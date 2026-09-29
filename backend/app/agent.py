@@ -25,8 +25,14 @@ class BuddyAgent:
         self.settings = settings
 
     async def respond_to_button(self, device_id: str) -> str:
+        return await self._respond(device_id, "The user pressed the button.", "greet the user and confirm that you are ready")
+
+    async def respond_to_transcript(self, device_id: str, transcript: str) -> str:
+        return await self._respond(device_id, transcript, "answer the user's spoken request helpfully")
+
+    async def _respond(self, device_id: str, user_message: str, task: str) -> str:
         if self.settings.provider == "mock":
-            return "Buddy online. I received your button."
+            return "Recibi tu mensaje."
         if self.settings.provider != "ollama":
             raise ValueError(f"unsupported agent provider: {self.settings.provider}")
 
@@ -40,12 +46,12 @@ class BuddyAgent:
                     "role": "system",
                     "content": (
                         "You are AI Buddy, a private desk companion. Respond in Spanish, "
-                        "warmly and concisely. This is a device button check, so greet the "
-                        "user and confirm that you are ready in one short sentence. Use plain "
-                        "ASCII only: no emoji and no accented characters."
+                        "warmly and concisely. "
+                        f"Please {task} in one or two short sentences. Use plain ASCII only: "
+                        "no emoji and no accented characters."
                     ),
                 },
-                {"role": "user", "content": f"The user pressed the button on {device_id}."},
+                {"role": "user", "content": f"Buddy device: {device_id}. User message: {user_message}"},
             ],
             "options": {"temperature": 0.4, "num_predict": 60},
         }
@@ -60,4 +66,4 @@ class BuddyAgent:
         content = response.json().get("message", {}).get("content", "")
         if not isinstance(content, str) or not content.strip():
             return "Estoy listo, pero no recibi una respuesta valida del modelo."
-        return re.sub(r"\s+", " ", content).strip()[:180]
+        return re.sub(r"\s+", " ", content).strip()[:220]

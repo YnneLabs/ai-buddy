@@ -15,6 +15,9 @@ services:
       AI_BUDDY_STT_MODEL: ${AI_BUDDY_STT_MODEL:-base}
       AI_BUDDY_STT_LANGUAGE: ${AI_BUDDY_STT_LANGUAGE:-es}
       AI_BUDDY_STT_TIMEOUT_SECONDS: ${AI_BUDDY_STT_TIMEOUT_SECONDS:-90}
+      AI_BUDDY_TTS_PROVIDER: ${AI_BUDDY_TTS_PROVIDER:-piper}
+      AI_BUDDY_TTS_VOICE: ${AI_BUDDY_TTS_VOICE:-es_AR-daniela-high}
+      AI_BUDDY_TTS_TIMEOUT_SECONDS: ${AI_BUDDY_TTS_TIMEOUT_SECONDS:-90}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

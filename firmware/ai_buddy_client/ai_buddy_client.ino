@@ -76,6 +76,7 @@ DeviceState gState = DeviceState::Boot;
 String gStateDetail;
 String gSessionUrl;
 bool gSocketConnected = false;
+size_t gIncomingAudioBytes = 0;
 bool gBootButtonDown = false;
 uint32_t gBootButtonPressedAtMs = 0;
 bool gPowerButtonDown = false;
@@ -409,6 +410,17 @@ void handleSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     setState(DeviceState::ConnectingSession, "Session disconnected");
     return;
   }
+  if (type == WStype_BIN) {
+    if (gIncomingAudioBytes != length) {
+      gIncomingAudioBytes = 0;
+      setState(DeviceState::Error, "Invalid response audio");
+      return;
+    }
+    gAudio.playPcm(payload, length);
+    gIncomingAudioBytes = 0;
+    setState(DeviceState::Online, WiFi.localIP().toString());
+    return;
+  }
   if (type != WStype_TEXT) {
     return;
   }
@@ -424,6 +436,17 @@ void handleSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     setState(DeviceState::Listening, "Transcribing audio");
   } else if (strcmp(messageType, "transcription") == 0) {
     setState(DeviceState::Online, String(message["text"] | ""));
+  } else if (strcmp(messageType, "assistant_audio_start") == 0) {
+    const size_t bytes = message["bytes"] | 0;
+    if (String(message["format"] | "") != "pcm_s16le" ||
+        message["sample_rate"] != 16000 ||
+        message["channels"] != 2 ||
+        bytes == 0 || bytes > 512000 || bytes % 4 != 0) {
+      setState(DeviceState::Error, "Invalid response metadata");
+      return;
+    }
+    gIncomingAudioBytes = bytes;
+    setState(DeviceState::PlayingAudio, "Buddy speaking");
   } else if (strcmp(messageType, "error") == 0) {
     setState(DeviceState::Error, String(message["code"] | "Audio error"));
   }

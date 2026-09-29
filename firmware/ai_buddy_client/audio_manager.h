@@ -15,6 +15,7 @@ class AudioManager {
   size_t recordedBytes() const;
   const uint8_t* recordingData() const;
   void playRecording();
+  void playPcm(const uint8_t* data, size_t bytes);
   void playTone(uint16_t frequencyHz, uint16_t durationMs);
   void playStartupChime();
   void shutdown();

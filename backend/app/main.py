@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Web
 from .agent import AgentSettings, BuddyAgent
 from .config import Settings, get_settings
 from .transcription import BuddyTranscriber, TranscriptionSettings
+from .speech import BuddySpeech, SpeechSettings, TARGET_CHANNELS, TARGET_SAMPLE_RATE
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -55,6 +56,16 @@ def get_transcriber(settings: Settings) -> BuddyTranscriber:
             model=settings.stt_model,
             language=settings.stt_language,
             timeout_seconds=settings.stt_timeout_seconds,
+        )
+    )
+
+
+def get_speech(settings: Settings) -> BuddySpeech:
+    return BuddySpeech(
+        SpeechSettings(
+            provider=settings.tts_provider,
+            voice=settings.tts_voice,
+            timeout_seconds=settings.tts_timeout_seconds,
         )
     )
 
@@ -134,6 +145,25 @@ async def device_session(
                 else:
                     logger.info("audio transcribed device_id=%s bytes=%s", device_id, len(audio_bytes))
                     await websocket.send_json({"type": "transcription", "text": transcript})
+                    try:
+                        response_text = await get_agent(settings).respond_to_transcript(device_id, transcript)
+                        await websocket.send_json({"type": "show_text", "text": response_text})
+                        speech = await get_speech(settings).synthesize(response_text)
+                        if len(speech) > 512000:
+                            raise ValueError("generated audio exceeds device limit")
+                        await websocket.send_json(
+                            {
+                                "type": "assistant_audio_start",
+                                "format": "pcm_s16le",
+                                "sample_rate": TARGET_SAMPLE_RATE,
+                                "channels": TARGET_CHANNELS,
+                                "bytes": len(speech),
+                            }
+                        )
+                        await websocket.send_bytes(speech)
+                    except Exception as exc:  # Preserve the session if the model or TTS fails.
+                        logger.warning("voice response failed device_id=%s error=%s", device_id, exc)
+                        await websocket.send_json({"type": "error", "code": "voice_response_failed"})
                 pending_audio = None
                 continue
 

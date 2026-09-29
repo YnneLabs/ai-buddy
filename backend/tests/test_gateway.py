@@ -2,6 +2,7 @@ import os
 
 os.environ["AI_BUDDY_AGENT_PROVIDER"] = "mock"
 os.environ["AI_BUDDY_STT_PROVIDER"] = "mock"
+os.environ["AI_BUDDY_TTS_PROVIDER"] = "mock"
 
 from fastapi.testclient import TestClient
 
@@ -50,7 +51,7 @@ def test_websocket_handshake_ping_and_button_event():
     assert ready["type"] == "session_ready"
     assert ready["protocol_version"] == "1"
     assert pong == {"type": "pong"}
-    assert command == {"type": "show_text", "text": "Buddy online. I received your button."}
+    assert command == {"type": "show_text", "text": "Recibi tu mensaje."}
 
 
 def test_websocket_receives_pcm_and_returns_transcription():
@@ -70,6 +71,18 @@ def test_websocket_receives_pcm_and_returns_transcription():
         receiving = websocket.receive_json()
         websocket.send_bytes(pcm)
         transcription = websocket.receive_json()
+        response = websocket.receive_json()
+        speech_start = websocket.receive_json()
+        speech = websocket.receive_bytes()
 
     assert receiving == {"type": "audio_receiving"}
     assert transcription == {"type": "transcription", "text": "Audio recibido localmente (1.0 segundos)."}
+    assert response == {"type": "show_text", "text": "Recibi tu mensaje."}
+    assert speech_start == {
+        "type": "assistant_audio_start",
+        "format": "pcm_s16le",
+        "sample_rate": 16000,
+        "channels": 2,
+        "bytes": 6400,
+    }
+    assert speech == b"\x00\x00\x00\x00" * 1600
