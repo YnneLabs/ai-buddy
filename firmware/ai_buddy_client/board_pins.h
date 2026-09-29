@@ -18,4 +18,16 @@ constexpr uint8_t PIN_BTN_BOTTOM = 18;
 constexpr uint8_t PIN_VBAT_HOLD = 17;
 constexpr uint8_t PIN_STATUS_LED = 3;
 
+constexpr uint8_t PIN_I2C_SDA = 47;
+constexpr uint8_t PIN_I2C_SCL = 48;
+constexpr uint8_t I2C_ADDR_ES8311 = 0x18;
+
+constexpr uint8_t PIN_I2S_MCLK = 14;
+constexpr uint8_t PIN_I2S_BCLK = 15;
+constexpr uint8_t PIN_I2S_DIN = 16;   // Codec ADC -> ESP32
+constexpr uint8_t PIN_I2S_LRCK = 43;
+constexpr uint8_t PIN_I2S_DOUT = 44;  // ESP32 -> Codec DAC
+constexpr uint8_t PIN_AUDIO_PWR = 42;
+constexpr uint8_t PIN_AUDIO_CTRL = 46;
+
 }  // namespace board

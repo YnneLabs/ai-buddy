@@ -107,12 +107,13 @@ Entregable: firmware que conecta a nuestro backend sin servicios externos.
 - `local_config.h` permite inyectar credenciales de un entorno de flasheo sin incluirlas en Git.
 - Validado manualmente: cold boot, Wi-Fi, fetch de configuracion, WebSocket autenticado y respuesta de Gemma renderizada.
 
-### Fase 3: Voz End-To-End - Siguiente
+### Fase 3: Voz End-To-End - En Progreso
 
 Entregable: presionar BOOT, hablar, recibir respuesta audible y visible.
 
 - Interaccion principal: un toque de `BOOT` inicia la escucha; el siguiente toque finaliza la captura y envia el turno.
 - `BOOT` mantenido durante tres segundos conserva el reset de configuracion; `PWR` conserva WPS.
+- Hito actual: codec ES8311 e I2S inicializados; dos toques de `BOOT` graban y reproducen audio local sin enviarlo al backend.
 - Confirmar y probar el camino de audio del hardware: I2S, ES8311, microfono y parlante.
 - Definir el protocolo binario de `audio_chunk` y `audio_end`, con limites de duracion, tamanos y backpressure.
 - Agregar STT local y conservar la transcripcion por sesion efimera.

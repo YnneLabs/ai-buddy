@@ -13,7 +13,19 @@ Firmware Arduino para `Waveshare ESP32-S3 e-Paper 1.54` que se conecta al gatewa
 - WPS Push Button: mantener `PWR` 1.5 segundos y luego presionar WPS en el router;
 - mantener `BOOT` durante tres segundos borra la configuración y reabre el portal.
 
-Audio, TTS y deep sleep quedan para fases posteriores.
+## Fase 3: Diagnostico De Audio
+
+El firmware ya inicializa el codec ES8311 y el bus I2S a 16 kHz, 16-bit,
+estereo. Mientras se implementa el transporte de audio, el boton `BOOT` permite
+validar el camino local: un toque inicia una grabacion y el segundo la detiene y
+la reproduce por el parlante. Mantenerlo durante tres segundos sigue borrando la
+configuracion. El audio grabado no se envia al backend ni se persiste.
+
+La salida serial debe incluir `AUDIO codec=ok`. Si el codec falla, el flujo de
+texto y la conexion al backend se mantienen disponibles.
+
+TTS, STT, streaming de audio y deep sleep quedan para los siguientes hitos de
+la fase.
 
 El LED integrado en `GPIO3` queda encendido mientras el firmware esta activo. Al
 apagar o entrar en deep sleep se apaga; el hardware validado solo expone este

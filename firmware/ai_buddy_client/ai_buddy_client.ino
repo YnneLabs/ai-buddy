@@ -4,12 +4,14 @@
 #include <HTTPClient.h>
 #include <Preferences.h>
 #include <SPI.h>
+#include <Wire.h>
 #include <WebServer.h>
 #include <WebSocketsClient.h>
 #include <WiFi.h>
 #include <esp_wps.h>
 
 #include "board_pins.h"
+#include "audio_manager.h"
 
 #if __has_include("local_config.h")
 #include "local_config.h"
@@ -46,6 +48,7 @@ DisplayType gDisplay(GxEPD2_154_D67(board::PIN_EPD_CS, board::PIN_EPD_DC, board:
 Preferences gPreferences;
 WebServer gPortal(80);
 WebSocketsClient gSocket;
+AudioManager gAudio;
 
 enum class DeviceState : uint8_t {
   Boot,
@@ -54,6 +57,8 @@ enum class DeviceState : uint8_t {
   ConnectingWifi,
   FetchingConfig,
   ConnectingSession,
+  Listening,
+  PlayingAudio,
   Online,
   Error,
 };
@@ -79,6 +84,7 @@ uint32_t gLastReconnectAtMs = 0;
 bool gWpsActive = false;
 bool gWpsSucceeded = false;
 uint32_t gWpsStartedAtMs = 0;
+bool gAudioReady = false;
 
 void startConnection();
 
@@ -96,6 +102,10 @@ const char* stateName(DeviceState state) {
       return "Getting config";
     case DeviceState::ConnectingSession:
       return "Connecting buddy";
+    case DeviceState::Listening:
+      return "Listening";
+    case DeviceState::PlayingAudio:
+      return "Audio check";
     case DeviceState::Online:
       return "Buddy online";
     case DeviceState::Error:
@@ -482,6 +492,22 @@ void handleBootButton() {
       clearConfig();
       ESP.restart();
     }
+    if (gAudio.isRecording()) {
+      gAudio.finishRecording();
+      Serial.printf("AUDIO captured bytes=%u\n", static_cast<unsigned>(gAudio.recordedBytes()));
+      setState(DeviceState::PlayingAudio, "Replaying local audio");
+      gAudio.playRecording();
+      setState(DeviceState::Online, WiFi.localIP().toString());
+      return;
+    }
+    if (gAudioReady) {
+      gAudio.playTone(880, 80);
+      if (gAudio.startRecording()) {
+        setState(DeviceState::Listening, "Press BOOT again to send");
+        Serial.println("AUDIO recording started");
+        return;
+      }
+    }
     if (gSocketConnected) {
       JsonDocument event;
       event["type"] = "button";
@@ -527,6 +553,10 @@ void setup() {
   gDisplay.setRotation(0);
   gDisplay.setTextColor(GxEPD_BLACK);
 
+  Wire.begin(board::PIN_I2C_SDA, board::PIN_I2C_SCL);
+  gAudioReady = gAudio.begin();
+  Serial.printf("AUDIO codec=%s free_psram=%u\n", gAudioReady ? "ok" : "fail", static_cast<unsigned>(ESP.getFreePsram()));
+
   loadConfig();
   WiFi.onEvent(onWifiEvent);
   setState(DeviceState::Boot, gConfig.deviceId);
@@ -538,6 +568,7 @@ void setup() {
 }
 
 void loop() {
+  gAudio.captureStep();
   handleBootButton();
   handlePowerButton();
   processWps();
