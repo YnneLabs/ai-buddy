@@ -97,3 +97,24 @@ def test_websocket_blocks_sensitive_action_without_confirmation():
         blocked = websocket.receive_json()
 
     assert blocked == {"type": "action_blocked", "reason": "confirmation_required"}
+
+
+def test_grokbot_callback_rejects_invalid_token():
+    response = client.post(
+        "/integrations/grokbot/reply",
+        json={"request_id": "request-01", "device_id": "buddy-01", "response_text": "Hola"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_grokbot_callback_rejects_unknown_request(monkeypatch):
+    monkeypatch.setenv("AI_BUDDY_GROKBOT_CALLBACK_TOKEN", "callback-test-token")
+
+    response = client.post(
+        "/integrations/grokbot/reply",
+        headers={"Authorization": "Bearer callback-test-token"},
+        json={"request_id": "request-01", "device_id": "buddy-01", "response_text": "Hola"},
+    )
+
+    assert response.status_code == 404

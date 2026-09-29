@@ -66,6 +66,12 @@ class BuddyMemory:
                     assistant_text TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS pending_external_requests (
+                    request_id TEXT PRIMARY KEY,
+                    device_id TEXT NOT NULL,
+                    user_text TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -135,6 +141,27 @@ class BuddyMemory:
                 (device_id, limit),
             ).fetchall()
         return [ConversationTurn(**dict(row)) for row in reversed(rows)]
+
+    def create_external_request(self, device_id: str, user_text: str) -> str:
+        request_id = str(uuid4())
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO pending_external_requests (request_id, device_id, user_text, created_at) VALUES (?, ?, ?, ?)",
+                (request_id, device_id, user_text[:500], self._now()),
+            )
+        return request_id
+
+    def external_request(self, request_id: str) -> tuple[str, str] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT device_id, user_text FROM pending_external_requests WHERE request_id = ?", (request_id,)
+            ).fetchone()
+        return None if row is None else (row["device_id"], row["user_text"])
+
+    def complete_external_request(self, request_id: str) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute("DELETE FROM pending_external_requests WHERE request_id = ?", (request_id,))
+        return cursor.rowcount == 1
 
     @staticmethod
     def _now() -> str:

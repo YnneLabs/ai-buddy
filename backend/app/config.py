@@ -21,6 +21,10 @@ class Settings:
     tts_voice: str
     tts_timeout_seconds: float
     data_dir: str
+    grokbot_webhook_url: str
+    grokbot_webhook_token: str
+    grokbot_callback_token: str
+    grokbot_timeout_seconds: float
 
 
 def get_settings() -> Settings:
@@ -41,4 +45,8 @@ def get_settings() -> Settings:
         tts_voice=os.getenv("AI_BUDDY_TTS_VOICE", "es_AR-daniela-high"),
         tts_timeout_seconds=float(os.getenv("AI_BUDDY_TTS_TIMEOUT_SECONDS", "90")),
         data_dir=os.getenv("AI_BUDDY_DATA_DIR", "/tmp/ai-buddy"),
+        grokbot_webhook_url=os.getenv("AI_BUDDY_GROKBOT_WEBHOOK_URL", "").rstrip("/"),
+        grokbot_webhook_token=os.getenv("AI_BUDDY_GROKBOT_WEBHOOK_TOKEN", ""),
+        grokbot_callback_token=os.getenv("AI_BUDDY_GROKBOT_CALLBACK_TOKEN", ""),
+        grokbot_timeout_seconds=float(os.getenv("AI_BUDDY_GROKBOT_TIMEOUT_SECONDS", "20")),
     )

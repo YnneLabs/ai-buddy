@@ -66,6 +66,26 @@ docker compose exec backend python -m app.cli history --device buddy-1D0470
 docker compose exec backend python -m app.cli permissions
 ```
 
+## Grokbot Via Cursor Automation
+
+El endpoint de Cursor inicia una automatizacion asincrona, por lo que el texto
+de respuesta debe volver al gateway antes de poder hablarse en el Buddy. Al
+configurar `AI_BUDDY_GROKBOT_WEBHOOK_URL`,
+`AI_BUDDY_GROKBOT_WEBHOOK_TOKEN` y `AI_BUDDY_GROKBOT_CALLBACK_TOKEN`, cada
+transcripcion se envia a Cursor con `request_id`, `device_id`, `transcript` y
+`callback_url`. La automatizacion debe responder con un POST autenticado:
+
+```sh
+curl -X POST https://ai-buddy.evil-gamer.net/integrations/grokbot/reply \
+  -H 'Authorization: Bearer <AI_BUDDY_GROKBOT_CALLBACK_TOKEN>' \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"<request_id>","device_id":"buddy-1D0470","response_text":"Respuesta para hablar"}'
+```
+
+El backend valida el request, sintetiza `response_text` con Piper y lo envia
+al Buddy por su WebSocket activo. Sin esas tres variables, el backend conserva
+Gemma local como fallback.
+
 ## Estado
 
 Incluye:
