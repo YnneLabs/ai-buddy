@@ -25,6 +25,7 @@ class Settings:
     grokbot_webhook_token: str
     grokbot_callback_token: str
     grokbot_timeout_seconds: float
+    grokbot_response_max_chars: int
 
 
 def get_settings() -> Settings:
@@ -49,4 +50,5 @@ def get_settings() -> Settings:
         grokbot_webhook_token=os.getenv("AI_BUDDY_GROKBOT_WEBHOOK_TOKEN", ""),
         grokbot_callback_token=os.getenv("AI_BUDDY_GROKBOT_CALLBACK_TOKEN", ""),
         grokbot_timeout_seconds=float(os.getenv("AI_BUDDY_GROKBOT_TIMEOUT_SECONDS", "20")),
+        grokbot_response_max_chars=int(os.getenv("AI_BUDDY_GROKBOT_RESPONSE_MAX_CHARS", "160")),
     )

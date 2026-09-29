@@ -29,6 +29,13 @@ class ConversationTurn:
     assistant_text: str
 
 
+@dataclass(frozen=True)
+class ExternalRequest:
+    device_id: str
+    user_text: str
+    created_at: str
+
+
 class BuddyMemory:
     """SQLite storage. A proposal is never persisted as a usable memory until confirmed."""
 
@@ -151,12 +158,12 @@ class BuddyMemory:
             )
         return request_id
 
-    def external_request(self, request_id: str) -> tuple[str, str] | None:
+    def external_request(self, request_id: str) -> ExternalRequest | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT device_id, user_text FROM pending_external_requests WHERE request_id = ?", (request_id,)
+                "SELECT device_id, user_text, created_at FROM pending_external_requests WHERE request_id = ?", (request_id,)
             ).fetchone()
-        return None if row is None else (row["device_id"], row["user_text"])
+        return None if row is None else ExternalRequest(**dict(row))
 
     def complete_external_request(self, request_id: str) -> bool:
         with self._connect() as connection:

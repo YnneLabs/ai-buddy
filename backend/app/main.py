@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any, Dict
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -112,12 +114,14 @@ def get_grokbot(settings: Settings) -> GrokbotWebhook:
             webhook_token=settings.grokbot_webhook_token,
             callback_url=callback_url,
             timeout_seconds=settings.grokbot_timeout_seconds,
+            response_max_chars=settings.grokbot_response_max_chars,
         )
     )
 
 
 async def send_spoken_reply(websocket: WebSocket, settings: Settings, device_id: str, response_text: str) -> None:
     await websocket.send_json({"type": "show_text", "text": response_text})
+    synthesis_started_at = perf_counter()
     speech = await get_speech(settings).synthesize(response_text)
     if len(speech) > 512000:
         raise ValueError("generated audio exceeds device limit")
@@ -133,10 +137,11 @@ async def send_spoken_reply(websocket: WebSocket, settings: Settings, device_id:
     for offset in range(0, len(speech), MAX_DEVICE_AUDIO_CHUNK_BYTES):
         await websocket.send_bytes(speech[offset : offset + MAX_DEVICE_AUDIO_CHUNK_BYTES])
     logger.info(
-        "reply audio sent device_id=%s bytes=%s chunks=%s",
+        "reply audio sent device_id=%s bytes=%s chunks=%s tts_ms=%.0f",
         device_id,
         len(speech),
         (len(speech) + MAX_DEVICE_AUDIO_CHUNK_BYTES - 1) // MAX_DEVICE_AUDIO_CHUNK_BYTES,
+        (perf_counter() - synthesis_started_at) * 1000,
     )
 
 
@@ -151,20 +156,26 @@ async def grokbot_reply(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid callback token")
     memory = get_memory(settings)
     pending = memory.external_request(reply.request_id)
-    if pending is None or pending[0] != reply.device_id:
+    if pending is None or pending.device_id != reply.device_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown request")
     websocket = connections.get(reply.device_id)
     if websocket is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="device is offline")
-    response_text = " ".join(reply.response_text.split())[:220]
+    response_text = " ".join(reply.response_text.split())[: settings.grokbot_response_max_chars]
+    try:
+        dispatched_at = datetime.fromisoformat(pending.created_at)
+        callback_ms = (datetime.now(timezone.utc) - dispatched_at).total_seconds() * 1000
+    except ValueError:
+        callback_ms = -1
+    logger.info("Grokbot callback received request_id=%s callback_ms=%.0f", reply.request_id, callback_ms)
     try:
         await send_spoken_reply(websocket, settings, reply.device_id, response_text)
     except Exception as exc:
         logger.warning("Grokbot reply delivery failed request_id=%s error=%s", reply.request_id, exc)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="reply delivery failed") from exc
-    memory.append_turn(reply.device_id, pending[1], response_text)
+    memory.append_turn(reply.device_id, pending.user_text, response_text)
     memory.complete_external_request(reply.request_id)
-    proposal = memory.propose_from_transcript(reply.device_id, pending[1])
+    proposal = memory.propose_from_transcript(reply.device_id, pending.user_text)
     if proposal is not None:
         request_id, content = proposal
         await websocket.send_json({"type": "memory_confirmation", "request_id": request_id, "content": content})
@@ -236,6 +247,7 @@ async def device_session(
                     pending_audio = None
                     continue
                 try:
+                    transcription_started_at = perf_counter()
                     transcript = await get_transcriber(settings).transcribe_pcm(
                         audio_bytes,
                         pending_audio["sample_rate"],
@@ -245,14 +257,25 @@ async def device_session(
                     logger.warning("audio transcription failed device_id=%s error=%s", device_id, exc)
                     await websocket.send_json({"type": "error", "code": "transcription_failed"})
                 else:
-                    logger.info("audio transcribed device_id=%s bytes=%s", device_id, len(audio_bytes))
+                    logger.info(
+                        "audio transcribed device_id=%s bytes=%s stt_ms=%.0f",
+                        device_id,
+                        len(audio_bytes),
+                        (perf_counter() - transcription_started_at) * 1000,
+                    )
                     await websocket.send_json({"type": "transcription", "text": transcript})
                     try:
                         memory = get_memory(settings)
                         grokbot = get_grokbot(settings)
                         if grokbot.enabled:
                             request_id = memory.create_external_request(device_id, transcript)
+                            dispatch_started_at = perf_counter()
                             await grokbot.dispatch(request_id, device_id, transcript)
+                            logger.info(
+                                "Grokbot dispatched request_id=%s dispatch_ms=%.0f",
+                                request_id,
+                                (perf_counter() - dispatch_started_at) * 1000,
+                            )
                             await websocket.send_json({"type": "show_text", "text": "Consultando Grokbot..."})
                         else:
                             response_text = await get_agent(settings).respond_to_transcript(

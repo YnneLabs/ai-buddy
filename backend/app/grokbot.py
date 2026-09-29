@@ -17,6 +17,7 @@ class GrokbotSettings:
     webhook_token: str
     callback_url: str
     timeout_seconds: float
+    response_max_chars: int
 
 
 class GrokbotWebhook:
@@ -35,6 +36,7 @@ class GrokbotWebhook:
             "device_id": device_id,
             "transcript": transcript,
             "callback_url": self.settings.callback_url,
+            "response_max_chars": self.settings.response_max_chars,
         }
         try:
             async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:

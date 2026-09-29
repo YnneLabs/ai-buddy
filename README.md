@@ -41,6 +41,11 @@ The firmware accepts both local `http`/`ws` URLs and deployed `https`/`wss`
 URLs. A provisioned device can be migrated once using the two
 `AI_BUDDY_BACKEND_MIGRATE_*` settings in `local_config.h`.
 
+The Grokbot route is asynchronous: Cursor schedules the automation before it
+can issue the callback. Set `AI_BUDDY_GROKBOT_RESPONSE_MAX_CHARS=160` (or less)
+to keep spoken answers quick; gateway logs report STT, dispatch, callback, and
+TTS timings separately.
+
 ## Firmware Del Buddy
 
 El cliente de red propio vive en [`firmware/ai_buddy_client/`](firmware/ai_buddy_client/).
