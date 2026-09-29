@@ -170,7 +170,11 @@ void renderState() {
     }
     gDisplay.setTextSize(1);
     gDisplay.setCursor(12, 190);
-    gDisplay.print("PWR 1.5s: WPS  BOOT 3s: reset");
+    if (gState == DeviceState::MemoryConfirmation) {
+      gDisplay.print("BOOT: save  PWR: discard");
+    } else {
+      gDisplay.print("PWR 1.5s: WPS  BOOT 3s: reset");
+    }
   } while (gDisplay.nextPage());
 }
 
