@@ -25,8 +25,8 @@ constexpr uint8_t I2C_ADDR_ES8311 = 0x18;
 constexpr uint8_t PIN_I2S_MCLK = 14;
 constexpr uint8_t PIN_I2S_BCLK = 15;
 constexpr uint8_t PIN_I2S_DIN = 16;   // Codec ADC -> ESP32
-constexpr uint8_t PIN_I2S_LRCK = 43;
-constexpr uint8_t PIN_I2S_DOUT = 44;  // ESP32 -> Codec DAC
+constexpr uint8_t PIN_I2S_LRCK = 38;
+constexpr uint8_t PIN_I2S_DOUT = 45;  // ESP32 -> Codec DAC
 constexpr uint8_t PIN_AUDIO_PWR = 42;
 constexpr uint8_t PIN_AUDIO_CTRL = 46;
 

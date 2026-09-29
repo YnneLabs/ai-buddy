@@ -16,7 +16,9 @@ Firmware Arduino para `Waveshare ESP32-S3 e-Paper 1.54` que se conecta al gatewa
 ## Fase 3: Diagnostico De Audio
 
 El firmware ya inicializa el codec ES8311 y el bus I2S a 16 kHz, 16-bit,
-estereo. Mientras se implementa el transporte de audio, el boton `BOOT` permite
+estereo. El pinout validado contra el ejemplo oficial es `MCLK=14`, `BCLK=15`,
+`DIN=16`, `LRCK=38` y `DOUT=45`; la alimentacion y el amplificador usan 42 y
+46. Mientras se implementa el transporte de audio, el boton `BOOT` permite
 validar el camino local: un toque inicia una grabacion y el segundo la detiene y
 la reproduce por el parlante. Mantenerlo durante tres segundos sigue borrando la
 configuracion. El audio grabado no se envia al backend ni se persiste.
