@@ -272,10 +272,14 @@ async def device_session(
                         route = fast_router.route(transcript)
                         logger.info("voice route device_id=%s target=%s reason=%s", device_id, route.target, route.reason)
                         if route.target == "gemma":
+                            await websocket.send_json({"type": "thinking", "provider": "gemma", "text": "Pensando..."})
                             response_text = await get_agent(settings).respond_to_small_talk(device_id, transcript)
                             memory.append_turn(device_id, transcript, response_text)
                             await send_spoken_reply(websocket, settings, device_id, response_text)
                         elif grokbot.enabled:
+                            await websocket.send_json(
+                                {"type": "thinking", "provider": "grokbot", "text": "Consultando asistente..."}
+                            )
                             request_id = memory.create_external_request(device_id, transcript)
                             dispatch_started_at = perf_counter()
                             await grokbot.dispatch(request_id, device_id, transcript)
@@ -284,8 +288,8 @@ async def device_session(
                                 request_id,
                                 (perf_counter() - dispatch_started_at) * 1000,
                             )
-                            await websocket.send_json({"type": "show_text", "text": "Consultando Grokbot..."})
                         else:
+                            await websocket.send_json({"type": "thinking", "provider": "gemma", "text": "Pensando..."})
                             response_text = await get_agent(settings).respond_to_transcript(
                                 device_id, transcript, memory.list_memories(device_id), memory.recent_turns(device_id)
                             )

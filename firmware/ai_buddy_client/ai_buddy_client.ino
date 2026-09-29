@@ -67,6 +67,7 @@ enum class DeviceState : uint8_t {
   FetchingConfig,
   ConnectingSession,
   Listening,
+  Thinking,
   PlayingAudio,
   MemoryConfirmation,
   Online,
@@ -99,32 +100,40 @@ bool gWpsSucceeded = false;
 uint32_t gWpsStartedAtMs = 0;
 bool gAudioReady = false;
 
+struct BatteryReading {
+  bool valid;
+  uint16_t millivolts;
+  uint8_t percent;
+};
+
 void startConnection();
 
 const char* stateName(DeviceState state) {
   switch (state) {
     case DeviceState::Boot:
-      return "Starting";
+      return "Iniciando";
     case DeviceState::Provisioning:
-      return "Setup Wi-Fi";
+      return "Configurar Wi-Fi";
     case DeviceState::Wps:
       return "Router WPS";
     case DeviceState::ConnectingWifi:
-      return "Connecting Wi-Fi";
+      return "Conectando Wi-Fi";
     case DeviceState::FetchingConfig:
-      return "Getting config";
+      return "Buscando config";
     case DeviceState::ConnectingSession:
-      return "Connecting buddy";
+      return "Conectando Buddy";
     case DeviceState::Listening:
-      return "Listening";
+      return "Escuchando";
+    case DeviceState::Thinking:
+      return "Pensando";
     case DeviceState::PlayingAudio:
-      return "Audio check";
+      return "Hablando";
     case DeviceState::MemoryConfirmation:
-      return "Remember this?";
+      return "Guardar memoria?";
     case DeviceState::Online:
-      return "Buddy online";
+      return "Buddy listo";
     case DeviceState::Error:
-      return "Connection error";
+      return "Error de conexion";
   }
   return "Unknown";
 }
@@ -152,40 +161,191 @@ String setupPassword() {
   return String(password);
 }
 
+BatteryReading readBattery() {
+  constexpr uint8_t kSamples = 8;
+  uint32_t totalMv = 0;
+  uint8_t validSamples = 0;
+  for (uint8_t sample = 0; sample < kSamples; ++sample) {
+    const uint16_t adcMv = analogReadMilliVolts(board::PIN_VBAT_ADC);
+    if (adcMv > 0) {
+      totalMv += adcMv;
+      ++validSamples;
+    }
+  }
+  if (validSamples == 0) {
+    return {false, 0, 0};
+  }
+  const uint16_t millivolts = static_cast<uint16_t>((totalMv / validSamples) * 2);
+  const int percent = ((static_cast<int>(millivolts) - 3200) * 100 + 500) / 1000;
+  return {true, millivolts, static_cast<uint8_t>(constrain(percent, 0, 100))};
+}
+
+String shortenedText(const String& value, size_t maxChars) {
+  if (value.length() <= maxChars) {
+    return value;
+  }
+  return value.substring(0, maxChars - 3) + "...";
+}
+
+void drawBattery(const BatteryReading& battery) {
+  constexpr int kX = 148;
+  constexpr int kY = 10;
+  gDisplay.drawRoundRect(kX, kY, 25, 12, 2, GxEPD_BLACK);
+  gDisplay.fillRect(kX + 25, kY + 4, 2, 4, GxEPD_BLACK);
+  if (battery.valid) {
+    const uint8_t segments = battery.percent == 0 ? 0 : (battery.percent + 24) / 25;
+    for (uint8_t segment = 0; segment < segments; ++segment) {
+      gDisplay.fillRect(kX + 3 + segment * 5, kY + 3, 3, 6, GxEPD_BLACK);
+    }
+  }
+  gDisplay.setTextSize(1);
+  gDisplay.setCursor(176, 20);
+  if (battery.valid) {
+    gDisplay.printf("%u%%", battery.percent);
+  } else {
+    gDisplay.print("--");
+  }
+}
+
+void drawStatusBar(const BatteryReading& battery) {
+  const bool connected = gState == DeviceState::Online || gState == DeviceState::Listening ||
+                         gState == DeviceState::Thinking || gState == DeviceState::PlayingAudio ||
+                         gState == DeviceState::MemoryConfirmation;
+  gDisplay.fillCircle(12, 16, 3, connected ? GxEPD_BLACK : GxEPD_WHITE);
+  gDisplay.drawCircle(12, 16, 3, GxEPD_BLACK);
+  gDisplay.setTextSize(1);
+  gDisplay.setCursor(20, 20);
+  gDisplay.print(shortenedText(stateName(gState), 19));
+  drawBattery(battery);
+  gDisplay.drawLine(8, 31, 192, 31, GxEPD_BLACK);
+}
+
+void drawCloud() {
+  // Build a single organic silhouette, then hollow it to leave a heavy e-paper outline.
+  gDisplay.fillRoundRect(43, 86, 114, 50, 25, GxEPD_BLACK);
+  gDisplay.fillCircle(68, 83, 30, GxEPD_BLACK);
+  gDisplay.fillCircle(100, 70, 34, GxEPD_BLACK);
+  gDisplay.fillCircle(133, 84, 29, GxEPD_BLACK);
+  gDisplay.fillRoundRect(47, 90, 106, 41, 21, GxEPD_WHITE);
+  gDisplay.fillCircle(69, 85, 25, GxEPD_WHITE);
+  gDisplay.fillCircle(100, 73, 29, GxEPD_WHITE);
+  gDisplay.fillCircle(132, 86, 24, GxEPD_WHITE);
+
+  // Two fixed stippled shadows give depth without gray levels or animation.
+  for (int y = 105; y <= 124; ++y) {
+    for (int x = 109; x <= 143; ++x) {
+      const int dx = x - 126;
+      const int dy = y - 112;
+      if (dx * dx + dy * dy < 280 && ((x + y) & 3) == 0) {
+        gDisplay.drawPixel(x, y, GxEPD_BLACK);
+      }
+    }
+  }
+  for (int y = 112; y <= 128; ++y) {
+    for (int x = 57; x <= 84; ++x) {
+      const int dx = x - 71;
+      const int dy = y - 119;
+      if (dx * dx + dy * dy < 170 && ((x + y) % 5) == 0) {
+        gDisplay.drawPixel(x, y, GxEPD_BLACK);
+      }
+    }
+  }
+}
+
+void drawSmile(bool open = false) {
+  if (open) {
+    gDisplay.fillRoundRect(88, 108, 24, 11, 5, GxEPD_BLACK);
+    gDisplay.fillRoundRect(92, 109, 16, 3, 1, GxEPD_WHITE);
+    return;
+  }
+  gDisplay.drawLine(88, 109, 94, 114, GxEPD_BLACK);
+  gDisplay.drawLine(94, 114, 100, 115, GxEPD_BLACK);
+  gDisplay.drawLine(100, 115, 106, 114, GxEPD_BLACK);
+  gDisplay.drawLine(106, 114, 112, 109, GxEPD_BLACK);
+}
+
+void drawFace() {
+  switch (gState) {
+    case DeviceState::Online:
+      gDisplay.fillCircle(86, 97, 3, GxEPD_BLACK);
+      gDisplay.fillCircle(114, 97, 3, GxEPD_BLACK);
+      drawSmile();
+      break;
+    case DeviceState::Listening:
+      gDisplay.fillCircle(85, 97, 4, GxEPD_BLACK);
+      gDisplay.fillCircle(115, 97, 4, GxEPD_BLACK);
+      gDisplay.fillCircle(100, 111, 3, GxEPD_BLACK);
+      break;
+    case DeviceState::Thinking:
+      gDisplay.drawLine(79, 98, 91, 100, GxEPD_BLACK);
+      gDisplay.drawLine(109, 100, 121, 98, GxEPD_BLACK);
+      gDisplay.fillCircle(92, 113, 2, GxEPD_BLACK);
+      gDisplay.fillCircle(100, 113, 2, GxEPD_BLACK);
+      gDisplay.fillCircle(108, 113, 2, GxEPD_BLACK);
+      break;
+    case DeviceState::PlayingAudio:
+      gDisplay.fillCircle(86, 97, 3, GxEPD_BLACK);
+      gDisplay.fillCircle(114, 97, 3, GxEPD_BLACK);
+      drawSmile(true);
+      break;
+    case DeviceState::MemoryConfirmation:
+      gDisplay.fillCircle(86, 98, 3, GxEPD_BLACK);
+      gDisplay.drawLine(109, 96, 119, 94, GxEPD_BLACK);
+      gDisplay.drawLine(110, 101, 119, 99, GxEPD_BLACK);
+      gDisplay.drawCircle(100, 112, 5, GxEPD_BLACK);
+      gDisplay.drawLine(100, 112, 100, 116, GxEPD_BLACK);
+      gDisplay.fillCircle(100, 121, 1, GxEPD_BLACK);
+      break;
+    case DeviceState::Error:
+      gDisplay.drawLine(79, 94, 91, 100, GxEPD_BLACK);
+      gDisplay.drawLine(109, 100, 121, 94, GxEPD_BLACK);
+      gDisplay.drawLine(88, 114, 112, 114, GxEPD_BLACK);
+      break;
+    default:
+      gDisplay.drawLine(80, 99, 91, 99, GxEPD_BLACK);
+      gDisplay.drawLine(109, 99, 120, 99, GxEPD_BLACK);
+      gDisplay.drawLine(91, 112, 109, 112, GxEPD_BLACK);
+      break;
+  }
+}
+
+void drawContext() {
+  const String detail = shortenedText(gStateDetail, 54);
+  gDisplay.setTextSize(1);
+  gDisplay.setCursor(10, 153);
+  gDisplay.print(detail.substring(0, 29));
+  if (detail.length() > 29) {
+    gDisplay.setCursor(10, 165);
+    gDisplay.print(detail.substring(29));
+  }
+  if (gState == DeviceState::MemoryConfirmation) {
+    gDisplay.setCursor(10, 189);
+    gDisplay.print("BOOT guardar  PWR descartar");
+  } else if (gState == DeviceState::Provisioning) {
+    gDisplay.setCursor(10, 189);
+    gDisplay.print("Portal activo: usa el telefono");
+  } else if (gState == DeviceState::Wps) {
+    gDisplay.setCursor(10, 189);
+    gDisplay.print("Presiona WPS en el router");
+  }
+}
+
 void renderState() {
+  const BatteryReading battery = readBattery();
+  if (battery.valid) {
+    Serial.printf("BATTERY voltage=%u mV percent=%u\n", battery.millivolts, battery.percent);
+  } else {
+    Serial.println("BATTERY voltage=invalid");
+  }
   gDisplay.setFullWindow();
   gDisplay.firstPage();
   do {
     gDisplay.fillScreen(GxEPD_WHITE);
     gDisplay.setTextColor(GxEPD_BLACK);
-    gDisplay.setTextSize(2);
-    gDisplay.setCursor(12, 24);
-    gDisplay.print("AI Buddy");
-    gDisplay.drawLine(12, 32, 188, 32, GxEPD_BLACK);
-    gDisplay.setTextSize(2);
-    gDisplay.setCursor(12, 66);
-    gDisplay.print(stateName(gState));
-    gDisplay.setTextSize(1);
-    gDisplay.setCursor(12, 90);
-    gDisplay.print(gStateDetail);
-    gDisplay.drawCircle(100, 135, 34, GxEPD_BLACK);
-    if (gState == DeviceState::Online) {
-      gDisplay.fillCircle(88, 128, 3, GxEPD_BLACK);
-      gDisplay.fillCircle(112, 128, 3, GxEPD_BLACK);
-      gDisplay.drawLine(84, 146, 100, 154, GxEPD_BLACK);
-      gDisplay.drawLine(100, 154, 116, 146, GxEPD_BLACK);
-    } else {
-      gDisplay.drawLine(86, 128, 94, 128, GxEPD_BLACK);
-      gDisplay.drawLine(106, 128, 114, 128, GxEPD_BLACK);
-      gDisplay.drawLine(88, 150, 112, 150, GxEPD_BLACK);
-    }
-    gDisplay.setTextSize(1);
-    gDisplay.setCursor(12, 190);
-    if (gState == DeviceState::MemoryConfirmation) {
-      gDisplay.print("BOOT: save  PWR: discard");
-    } else {
-      gDisplay.print("PWR 1.5s: WPS  BOOT 3s: reset");
-    }
+    drawStatusBar(battery);
+    drawCloud();
+    drawFace();
+    drawContext();
   } while (gDisplay.nextPage());
 }
 
@@ -467,6 +627,8 @@ void handleSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     setState(DeviceState::Listening, "Transcribing audio");
   } else if (strcmp(messageType, "transcription") == 0) {
     setState(DeviceState::Online, String(message["text"] | ""));
+  } else if (strcmp(messageType, "thinking") == 0) {
+    setState(DeviceState::Thinking, String(message["text"] | "Pensando..."));
   } else if (strcmp(messageType, "assistant_audio_start") == 0) {
     const size_t bytes = message["bytes"] | 0;
     if (String(message["format"] | "") != "pcm_s16le" ||
@@ -665,6 +827,8 @@ void setup() {
 
   pinMode(board::PIN_VBAT_HOLD, OUTPUT);
   digitalWrite(board::PIN_VBAT_HOLD, HIGH);
+  analogReadResolution(12);
+  analogSetPinAttenuation(board::PIN_VBAT_ADC, ADC_11db);
   pinMode(board::PIN_STATUS_LED, OUTPUT);
   digitalWrite(board::PIN_STATUS_LED, HIGH);
   pinMode(board::PIN_BTN_TOP, INPUT_PULLUP);

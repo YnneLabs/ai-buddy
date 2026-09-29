@@ -1,4 +1,5 @@
 import os
+from unittest.mock import AsyncMock
 
 os.environ["AI_BUDDY_AGENT_PROVIDER"] = "mock"
 os.environ["AI_BUDDY_STT_PROVIDER"] = "mock"
@@ -72,12 +73,14 @@ def test_websocket_receives_pcm_and_returns_transcription():
         receiving = websocket.receive_json()
         websocket.send_bytes(pcm)
         transcription = websocket.receive_json()
+        thinking = websocket.receive_json()
         response = websocket.receive_json()
         speech_start = websocket.receive_json()
         speech = websocket.receive_bytes()
 
     assert receiving == {"type": "audio_receiving"}
     assert transcription == {"type": "transcription", "text": "Audio recibido localmente (1.0 segundos)."}
+    assert thinking == {"type": "thinking", "provider": "gemma", "text": "Pensando..."}
     assert response == {"type": "show_text", "text": "Recibi tu mensaje."}
     assert speech_start == {
         "type": "assistant_audio_start",
@@ -87,6 +90,24 @@ def test_websocket_receives_pcm_and_returns_transcription():
         "bytes": 6400,
     }
     assert speech == b"\x00\x00\x00\x00" * 1600
+
+
+def test_websocket_emits_thinking_before_local_gemma_reply(monkeypatch):
+    transcriber = type("Transcriber", (), {"transcribe_pcm": AsyncMock(return_value="Hola Buddy")})()
+    monkeypatch.setattr("app.main.get_transcriber", lambda settings: transcriber)
+    pcm = b"\x00\x00\x00\x00" * 100
+    with client.websocket_connect(f"/device/session?token={TOKEN}") as websocket:
+        websocket.send_json({"type": "hello", "device_id": "buddy-thinking"})
+        websocket.receive_json()
+        websocket.send_json(
+            {"type": "audio_start", "format": "pcm_s16le", "sample_rate": 16000, "channels": 2, "bytes": len(pcm)}
+        )
+        websocket.receive_json()
+        websocket.send_bytes(pcm)
+        websocket.receive_json()
+        thinking = websocket.receive_json()
+
+    assert thinking == {"type": "thinking", "provider": "gemma", "text": "Pensando..."}
 
 
 def test_websocket_blocks_sensitive_action_without_confirmation():
