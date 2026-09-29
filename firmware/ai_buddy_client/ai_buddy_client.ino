@@ -76,7 +76,6 @@ DeviceState gState = DeviceState::Boot;
 String gStateDetail;
 String gSessionUrl;
 bool gSocketConnected = false;
-size_t gIncomingAudioBytes = 0;
 bool gBootButtonDown = false;
 uint32_t gBootButtonPressedAtMs = 0;
 bool gPowerButtonDown = false;
@@ -411,14 +410,14 @@ void handleSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     return;
   }
   if (type == WStype_BIN) {
-    if (gIncomingAudioBytes != length) {
-      gIncomingAudioBytes = 0;
+    if (!gAudio.appendRemoteAudio(payload, length)) {
       setState(DeviceState::Error, "Invalid response audio");
       return;
     }
-    gAudio.playPcm(payload, length);
-    gIncomingAudioBytes = 0;
-    setState(DeviceState::Online, WiFi.localIP().toString());
+    if (gAudio.remoteAudioComplete()) {
+      gAudio.playRemoteAudio();
+      setState(DeviceState::Online, WiFi.localIP().toString());
+    }
     return;
   }
   if (type != WStype_TEXT) {
@@ -445,7 +444,10 @@ void handleSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
       setState(DeviceState::Error, "Invalid response metadata");
       return;
     }
-    gIncomingAudioBytes = bytes;
+    if (!gAudio.beginRemoteAudio(bytes)) {
+      setState(DeviceState::Error, "Response audio unavailable");
+      return;
+    }
     setState(DeviceState::PlayingAudio, "Buddy speaking");
   } else if (strcmp(messageType, "error") == 0) {
     setState(DeviceState::Error, String(message["code"] | "Audio error"));

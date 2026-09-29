@@ -103,6 +103,36 @@ size_t AudioManager::recordedBytes() const { return recordedBytes_; }
 
 const uint8_t* AudioManager::recordingData() const { return buffer_; }
 
+bool AudioManager::beginRemoteAudio(size_t expectedBytes) {
+  if (!ready_ || expectedBytes == 0 || expectedBytes > kMaxBytes || expectedBytes % kBytesPerFrame != 0) {
+    return false;
+  }
+  remoteAudioBytes_ = 0;
+  remoteAudioExpectedBytes_ = expectedBytes;
+  return true;
+}
+
+bool AudioManager::appendRemoteAudio(const uint8_t* data, size_t bytes) {
+  if (data == nullptr || remoteAudioExpectedBytes_ == 0 || remoteAudioBytes_ + bytes > remoteAudioExpectedBytes_) {
+    return false;
+  }
+  memcpy(buffer_ + remoteAudioBytes_, data, bytes);
+  remoteAudioBytes_ += bytes;
+  return true;
+}
+
+bool AudioManager::remoteAudioComplete() const {
+  return remoteAudioExpectedBytes_ > 0 && remoteAudioBytes_ == remoteAudioExpectedBytes_;
+}
+
+void AudioManager::playRemoteAudio() {
+  if (remoteAudioComplete()) {
+    playPcm(buffer_, remoteAudioBytes_);
+  }
+  remoteAudioBytes_ = 0;
+  remoteAudioExpectedBytes_ = 0;
+}
+
 void AudioManager::playRecording() {
   if (!ready_ || !hasRecording()) {
     return;
@@ -165,6 +195,8 @@ void AudioManager::playStartupChime() {
 
 void AudioManager::shutdown() {
   recording_ = false;
+  remoteAudioBytes_ = 0;
+  remoteAudioExpectedBytes_ = 0;
   stopCodecPath();
   setAmplifierEnabled(false);
   if (buffer_ != nullptr) {

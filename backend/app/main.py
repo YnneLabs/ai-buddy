@@ -20,6 +20,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("ai_buddy.gateway")
 
 app = FastAPI(title="AI Buddy Gateway", version="0.1.0")
+MAX_DEVICE_AUDIO_CHUNK_BYTES = 8 * 1024
 
 
 def require_device_token(
@@ -160,7 +161,14 @@ async def device_session(
                                 "bytes": len(speech),
                             }
                         )
-                        await websocket.send_bytes(speech)
+                        for offset in range(0, len(speech), MAX_DEVICE_AUDIO_CHUNK_BYTES):
+                            await websocket.send_bytes(speech[offset : offset + MAX_DEVICE_AUDIO_CHUNK_BYTES])
+                        logger.info(
+                            "reply audio sent device_id=%s bytes=%s chunks=%s",
+                            device_id,
+                            len(speech),
+                            (len(speech) + MAX_DEVICE_AUDIO_CHUNK_BYTES - 1) // MAX_DEVICE_AUDIO_CHUNK_BYTES,
+                        )
                     except Exception as exc:  # Preserve the session if the model or TTS fails.
                         logger.warning("voice response failed device_id=%s error=%s", device_id, exc)
                         await websocket.send_json({"type": "error", "code": "voice_response_failed"})

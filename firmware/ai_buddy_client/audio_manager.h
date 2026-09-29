@@ -16,6 +16,10 @@ class AudioManager {
   const uint8_t* recordingData() const;
   void playRecording();
   void playPcm(const uint8_t* data, size_t bytes);
+  bool beginRemoteAudio(size_t expectedBytes);
+  bool appendRemoteAudio(const uint8_t* data, size_t bytes);
+  bool remoteAudioComplete() const;
+  void playRemoteAudio();
   void playTone(uint16_t frequencyHz, uint16_t durationMs);
   void playStartupChime();
   void shutdown();
@@ -42,6 +46,8 @@ class AudioManager {
 
   uint8_t* buffer_ = nullptr;
   size_t recordedBytes_ = 0;
+  size_t remoteAudioBytes_ = 0;
+  size_t remoteAudioExpectedBytes_ = 0;
   bool recording_ = false;
   bool ready_ = false;
   i2s_chan_handle_t txChannel_ = nullptr;
