@@ -31,6 +31,15 @@ services:
       - buddy_data:/data
     restart: unless-stopped
 
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - backend
+    profiles:
+      - tunnel
+    restart: unless-stopped
+
 volumes:
   stt_models:
   buddy_data:

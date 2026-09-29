@@ -24,6 +24,19 @@ Para una placa en la misma red, configurá `AI_BUDDY_PUBLIC_BASE_URL` con la IP 
 dominio accesible desde el Buddy. El contrato y las pruebas viven en
 [`backend/`](backend/).
 
+## Mac mini Behind Cloudflare Tunnel
+
+Set `AI_BUDDY_PUBLIC_BASE_URL=https://ai-buddy.evil-gamer.net` and
+`CLOUDFLARE_TUNNEL_TOKEN` in the Mac mini's `.env`. Start the application and
+its outbound tunnel together:
+
+```bash
+docker compose --profile tunnel up -d
+```
+
+Cloudflare routes `ai-buddy.evil-gamer.net` to the tunnel's local service at
+`http://backend:8000`; no router port-forwarding is required.
+
 ## Firmware Del Buddy
 
 El cliente de red propio vive en [`firmware/ai_buddy_client/`](firmware/ai_buddy_client/).
